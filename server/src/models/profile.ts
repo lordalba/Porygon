@@ -1,3 +1,5 @@
+import { TestingProfile } from "./TestingProfile";
+
 export interface Service {
   name: string;
   version: string;
@@ -12,6 +14,7 @@ export interface Profile {
   name: string;
   namespace: string;
   services: Service[];
+  testingProfiles: TestingProfile[];
   clusterUrl: string;
   saToken: string;
 }

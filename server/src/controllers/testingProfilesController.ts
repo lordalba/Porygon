@@ -1,6 +1,7 @@
-// src/controllers/testingProfilesController.ts
+import { v4 as uuidv4 } from "uuid";
 import { Request, Response } from "express";
 import { TestingProfile } from "../models/TestingProfile";
+import { profiles } from "../models/profile";
 
 // In-memory store for testing profiles (replace with database later if needed)
 let testingProfiles: TestingProfile[] = [];
@@ -14,7 +15,7 @@ export const getAllTestingProfiles = (req: Request, res: Response) => {
 export const createTestingProfile = (req: Request, res: Response) => {
   console.log("got new profile to create!");
   const newProfile: TestingProfile = {
-    id: `profile-${Date.now()}`,
+    id: uuidv4(),
     ...req.body,
     isActive: false,
     createdAt: new Date(),
@@ -23,6 +24,9 @@ export const createTestingProfile = (req: Request, res: Response) => {
 
   console.log(" the testing profile to add: " + JSON.stringify(newProfile));
   testingProfiles.push(newProfile);
+
+  const profileIndex = profiles.findIndex((profile) => profile.id === req.body.profileId);
+  profiles[profileIndex].testingProfiles.push(newProfile);
   res.status(201).json(newProfile);
 };
 

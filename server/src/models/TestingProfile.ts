@@ -1,11 +1,11 @@
 export interface TestingProfile {
     id: string;
+    profileId: string,
     name: string;
-    namespace: string;
+    profile: string;
     services: {
       name: string;
       desiredVersion: string;
-      desiredPodCount: number;
     }[];
     isActive: boolean;
     createdAt: Date;

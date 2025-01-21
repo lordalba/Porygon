@@ -6,6 +6,7 @@ import { createFullyUpdatedProfile } from "../services/ProfilesService";
 // import { monitorOpenShiftChangesWithWatch } from "../utils/openshiftPoller";
 import WebSocketManager from "../websockets/websocketServer";
 import { monitorOpenShiftChanges } from "../utils/openshiftPoller";
+import { TestingProfile } from "src/models/TestingProfile";
 
 const serviceAccountName = "porygon-sa";
 
@@ -35,14 +36,16 @@ export const updateProfile = (req: Request<{ id: string }>, res: Response) => {
   if (!name || !namespace || !Array.isArray(services)) {
     return res.status(400).json({ error: "Invalid profile data" });
   }
+  const testingProfiles: TestingProfile[] = [];
 
   profiles[profileIndex] = {
     id,
     name,
     namespace,
     services,
-    clusterUrl: profiles[profileIndex].clusterUrl, // Retain the existing clusterUrl
-    saToken: profiles[profileIndex].saToken,      // Retain the existing saToken
+    clusterUrl: profiles[profileIndex].clusterUrl,
+    testingProfiles,
+    saToken: profiles[profileIndex].saToken,
   };
 
   return res
@@ -106,12 +109,15 @@ export const createProfile = async (req: Request, res: Response, websocketManage
         podCount: service.podCount ?? 1, // Default to 1 pod if not specified
       }));
 
+      const testingProfiles: TestingProfile[] = [];
+
       const profile = {
         id: uuidv4(),
         name,
         namespace,
         services: initializedServices,
         saToken,
+        testingProfiles,
         clusterUrl,
       };
 

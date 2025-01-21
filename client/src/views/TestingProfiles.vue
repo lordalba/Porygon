@@ -4,7 +4,7 @@
         <!-- Header Section -->
         <div class="mb-8 flex items-center justify-between">
           <div>
-            <h1 class="text-3xl font-bold text-gray-900">Porygon Testing Profiles</h1>
+            <h1 class="text-3xl font-bold text-gray-900">Testing Profiles</h1>
             <p class="mt-2 text-gray-600">Manage and control your Kubernetes testing environments</p>
           </div>
           <div class="flex gap-4">
@@ -16,7 +16,7 @@
                 class="w-64 rounded-lg border border-gray-300 bg-white px-4 py-2 pl-10 focus:border-blue-500 focus:outline-none"
               />
               <span class="absolute left-3 top-2.5 text-gray-400">
-                🔍
+                <i class="fa-solid fa-magnifying-glass"></i>
               </span>
             </div>
             <select 
@@ -166,7 +166,7 @@
               </button>
             </div>
   
-            <form @submit.prevent="createTestingProfile" class="space-y-6">
+            <form @submit.prevent="createTestingProfile(profile)" class="space-y-6">
               <!-- Profile Name -->
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-700">
@@ -310,7 +310,7 @@
     if (response.ok) {
       profiles.value = (await response.json()).map((profile) => ({
         ...profile,
-        testingProfiles: profile.testingProfiles || [], // Default to empty array
+        testingProfiles: profile.testingProfiles || [],
       }));
     } else {
       toast.error("Failed to fetch profiles.");
@@ -337,13 +337,14 @@ const toggleExpand = (profileId) => {
         modalProfile.value = null;
       };
   
-      const createTestingProfile = async () => {
+      const createTestingProfile = async (profile) => {
         if (newTestingProfile.services.length === 0) {
           toast.warning('Please add at least one service');
           return;
         }
   
         try {
+          console.log("ze profile I'm adding a testing profile at: " + modalProfile.value.name + " and id: " + modalProfile.value.id)
           const response = await fetch('http://localhost:3000/api/testing-profiles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -369,7 +370,7 @@ const toggleExpand = (profileId) => {
       };
   
       const addService = () => {
-        newTestingProfile.services.push({ name: '', version: '' });
+        newTestingProfile.services.push({ name: '', desiredVersion: '' });
       };
   
       const removeService = (index) => {
