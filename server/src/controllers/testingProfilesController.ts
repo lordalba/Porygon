@@ -30,6 +30,67 @@ export const createTestingProfile = (req: Request, res: Response) => {
   res.status(201).json(newProfile);
 };
 
+// In your server file
+export const activateTestingProfile = (req: Request, res: Response) => {
+  const { profileId, testingProfileId } = req.body;
+
+  // Find the profile and the testing profile
+  const profile = profiles.find((p) => p.id === profileId);
+  const testingProfile = testingProfiles.find((tp) => tp.id === testingProfileId);
+
+
+  if (!profile) {
+    return res.status(404).json({ error: "Profile not found" });
+  }
+
+  if (!testingProfile) {
+    return res.status(404).json({ error: "Testing profile not found" });
+  }
+
+  testingProfile.isActive = true;
+
+  profile.services.forEach((service) => {
+    const testingService = testingProfile.services.find((s) => s.name === service.name);
+    if (testingService) {
+      console.log("yo I'm in ze activate for service: " + JSON.stringify(testingService))
+      // Save the previous version as a backup (optional)
+      service.previousVersion = service.version;
+      // Update the service version to the desired version
+      service.version = testingService.desiredVersion;
+    }
+  });
+
+  return res.status(200).json({ message: "Testing profile activated successfully", profile });
+};
+
+export const deactivateTestingProfile = (req: Request, res: Response) => {
+  const { profileId, testingProfileId } = req.body;
+
+  // Find the profile by ID
+  const profile = profiles.find((p) => p.id === profileId);
+
+  if (!profile) {
+    return res.status(404).json({ error: "Profile not found" });
+  }
+
+  profile.testingProfiles.forEach((testingProfile) => {
+    if (testingProfile.id === testingProfileId) {
+      testingProfile.isActive = false;
+      testingProfile.services.forEach((testService) => {
+        const profileService = profile.services.find((service) => service.name === testService.name);
+        if (profileService && profileService.previousVersion) {
+          profileService.version = profileService.previousVersion;
+        }
+      });
+    }
+  });
+
+  return res.status(200).json({ message: "All testing profiles deactivated and service versions reverted successfully", profile });
+};
+
+
+
+
 // Update a testing profile
 export const updateTestingProfile = (req: Request, res: Response) => {
   const { id } = req.params;
@@ -51,22 +112,23 @@ export const updateTestingProfile = (req: Request, res: Response) => {
 // Delete a testing profile
 export const deleteTestingProfile = (req: Request, res: Response) => {
   const { id } = req.params;
+
+  // Log the incoming details for debugging
+  console.log(
+    "Deleting testing profile with id: " + id + " for profile with id: " + req.body.profileId
+  );
+
+  // Remove the testing profile from the global list
   testingProfiles = testingProfiles.filter((profile) => profile.id !== id);
-  res.status(204).send();
-};
 
-// Activate a testing profile
-export const activateTestingProfile = (req: Request, res: Response) => {
-  const { id } = req.params;
+  // Find the corresponding profile
+  const profile = profiles.find((p) => p.id === req.body.profileId);
 
-  testingProfiles.forEach((profile) => {
-    profile.isActive = profile.id === id; // Only one profile can be active
-  });
-
-  const activeProfile = testingProfiles.find((profile) => profile.id === id);
-  if (!activeProfile) {
-    return res.status(404).json({ error: "Testing profile not found" });
+  // Remove the testing profile from the profile's testingProfiles array
+  if (profile) {
+    profile.testingProfiles = profile.testingProfiles.filter((tp) => tp.id !== id);
   }
 
-  return res.json({ message: "Testing profile activated", activeProfile });
+  // Respond with a no-content status
+  res.status(204).send();
 };

@@ -7,6 +7,7 @@ export interface Service {
   podCount: number;
   note?: string;
   testGroupId?: string;
+  previousVersion?: string;
 }
 
 export interface Profile {

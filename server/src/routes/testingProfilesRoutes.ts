@@ -6,6 +6,7 @@ import {
   updateTestingProfile,
   deleteTestingProfile,
   activateTestingProfile,
+  deactivateTestingProfile
 } from "../controllers/testingProfilesController";
 
 const router = express.Router();
@@ -14,6 +15,7 @@ router.get("/", getAllTestingProfiles);
 router.post("/", createTestingProfile);
 router.put("/:id", updateTestingProfile);
 router.delete("/:id", deleteTestingProfile);
-router.post("/:id/activate", activateTestingProfile);
+router.post("/activate", activateTestingProfile);
+router.post("/deactivate", deactivateTestingProfile);
 
 export default router;
