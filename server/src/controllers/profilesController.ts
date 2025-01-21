@@ -116,7 +116,7 @@ export const createProfile = async (req: Request, res: Response, websocketManage
       };
 
       profiles.push(profile);
-      monitorOpenShiftChanges(namespace, saToken, clusterUrl, websocketManager);
+      // monitorOpenShiftChanges(namespace, saToken, clusterUrl, websocketManager);
       // monitorOpenShiftChangesWithWatch(saToken, clusterUrl, websocketManager);
       res.status(201).json({ message: "Profile created successfully", profile });
     } else {

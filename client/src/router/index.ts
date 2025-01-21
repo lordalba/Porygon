@@ -3,15 +3,16 @@ import Home from '../views/Home.vue';
 import UploadProfile from '../views/UploadProfile.vue';
 import DeployProfile from '../views/DeployProfile.vue';
 import ProfileList from '../views/ProfileList.vue';
-import ManageTestingServices from '../views/ManageTestingServices.vue';
+
 import UpdateProfile from '../views/UpdateProfile.vue';
+import TestingProfiles from '../views/TestingProfiles.vue';
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/upload', name: 'UploadProfile', component: UploadProfile },
   { path: "/profiles", name: "ProfileList", component: ProfileList },
   { path: '/deploy/:profileName', name: 'DeployProfile', component: DeployProfile },
-  { path: '/manage-testing', name: 'manageTesting', component: ManageTestingServices },
+  { path: '/manage-testing', name: 'manageTesting', component: TestingProfiles },
   {
     path: '/profiles/update/:id', // Add the update route
     name: 'UpdateProfile',

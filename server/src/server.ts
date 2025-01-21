@@ -5,8 +5,7 @@ import profilesRoutes from "./routes/profiles";
 import createServicesRouter from "./routes/services";
 import http from "http";
 import WebSocketManager from "./websockets/websocketServer";
-// import { monitorOpenShiftChangesWithWatch } from "./utils/openshiftPoller"; // Poller service for OpenShift updates
-import { profiles } from "./models/profile";
+import testingProfilesRoutes from "./routes/testingProfilesRoutes";
 
 const app = express();
 
@@ -35,6 +34,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/profiles", profilesRoutes(websocketManager, monitoredNamespaces));
 app.use("/api/services", createServicesRouter(websocketManager));
+app.use("/api/testing-profiles", testingProfilesRoutes);
 
 const PORT = 3000;
 server.listen(PORT, () => {
