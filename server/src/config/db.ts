@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
 
+const MONGO_URI="mongodb+srv://albalakyoav:uwaZy1200pd8e1Eu@cluster.werpa.mongodb.net/"
+
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI as string, {
+    await mongoose.connect(MONGO_URI, {
       // Removed deprecated options
     });
     console.log('MongoDB connected');

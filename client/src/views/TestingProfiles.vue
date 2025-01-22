@@ -34,7 +34,7 @@
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
         <div
           v-for="profile in filteredProfiles"
-          :key="profile.id"
+          :key="profile._id"
           class="group rounded-xl border bg-white p-6 shadow-sm transition-all hover:shadow-md"
         >
           <!-- Profile Header -->
@@ -63,9 +63,9 @@
               Preview
               </button>
               <button
-                @click="toggleExpand(profile.id)"
+                @click="toggleExpand(profile._id)"
                 class="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
-                :class="{ 'rotate-180': expandedProfiles[profile.id] }"
+                :class="{ 'rotate-180': expandedProfiles[profile._id] }"
               >
                 ↓
               </button>
@@ -73,7 +73,7 @@
           </div>
 
           <!-- Services Summary (when collapsed) -->
-          <div v-if="!expandedProfiles[profile.id]" class="mt-4">
+          <div v-if="!expandedProfiles[profile._id]" class="mt-4">
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="service in profile.services.slice(0, 3)"
@@ -93,7 +93,7 @@
 
           <!-- Expanded Content -->
           <div
-            v-if="expandedProfiles[profile.id]"
+            v-if="expandedProfiles[profile._id]"
             class="mt-6 space-y-4"
           >
             <!-- Testing Profiles Section -->
@@ -103,7 +103,7 @@
     <!-- Testing Profile Card -->
     <div 
   v-for="testProfile in profile.testingProfiles"
-  :key="testProfile.id"
+  :key="testProfile._id"
   class="relative rounded-lg border border-gray-200 p-4 bg-white shadow-sm transition-all duration-200"
   :class="{
     'bg-blue-50/40 border-blue-200': testProfile.isActive,
@@ -371,7 +371,7 @@ export default {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: newTestingProfile.name,
-            profileId: modalProfile.value.id,
+            profileId: modalProfile.value._id,
             services: newTestingProfile.services,
           }),
         });
@@ -399,51 +399,70 @@ export default {
     };
 
     const activateTestingProfile = async (profile, testingProfile) => {
-      try {
-        const endpoint = testingProfile.isActive ? 'deactivate' : 'activate';
-        const response = await fetch(`http://localhost:3000/api/testing-profiles/${endpoint}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            profileId: profile.id,
-            testingProfileId: testingProfile.id,
-          }),
-        });
+  try {
+    const endpoint = testingProfile.isActive ? 'deactivate' : 'activate';
+    const response = await fetch(`http://localhost:3000/api/testing-profiles/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        profileId: profile._id,
+        testingProfileId: testingProfile._id,
+      }),
+    });
 
-        if (response.ok) {
-          const updatedProfile = await response.json();
-          // Update the local profile state with the new versions and testing profile statuses
-          const profileIndex = profiles.value.findIndex((p) => p.id === profile.id);
-          if (profileIndex > -1) {
-            profiles.value[profileIndex] = updatedProfile.profile;
-          }
-          toast.success(`Testing profile ${testingProfile.isActive ? 'deactivated' : 'activated'} successfully`);
-        } else {
-          const errorData = await response.json();
-          toast.error(`Failed to ${endpoint} testing profile: ${errorData.error}`);
-        }
-      } catch (error) {
-        console.error(`Error ${testingProfile.isActive ? 'deactivating' : 'activating'} testing profile:`, error);
-        toast.error(`An error occurred while ${testingProfile.isActive ? 'deactivating' : 'activating'} the testing profile.`);
+    if (response.ok) {
+      const updatedData = await response.json();
+      
+      // Fetch the updated profile to ensure testingProfiles are populated
+      const updatedProfileResponse = await fetch(`http://localhost:3000/api/profiles/${profile._id}`);
+      if (!updatedProfileResponse.ok) {
+        toast.error("Failed to fetch updated profile data.");
+        return;
       }
-    };
+
+      const updatedProfile = await updatedProfileResponse.json();
+
+      // Update the local profiles state
+      const profileIndex = profiles.value.findIndex((p) => p._id === profile._id);
+      if (profileIndex > -1) {
+        profiles.value[profileIndex] = updatedProfile; // Replace with the updated profile
+      }
+
+      toast.success(
+        `Testing profile ${testingProfile.isActive ? 'deactivated' : 'activated'} successfully`
+      );
+    } else {
+      const errorData = await response.json();
+      toast.error(`Failed to ${endpoint} testing profile: ${errorData.error}`);
+    }
+  } catch (error) {
+    console.error(
+      `Error ${testingProfile.isActive ? 'deactivating' : 'activating'} testing profile:`,
+      error
+    );
+    toast.error(
+      `An error occurred while ${testingProfile.isActive ? 'deactivating' : 'activating'} the testing profile.`
+    );
+  }
+};
+
 
     const deleteTestingProfile = async (profile, testingProfile) => {
       try {
-        const response = await fetch(`http://localhost:3000/api/testing-profiles/${testingProfile.id}`, {
+        const response = await fetch(`http://localhost:3000/api/testing-profiles/${testingProfile._id}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            profileId: profile.id,
+            profileId: profile._id,
           }),
         });
 
         if (response.ok) {
           // Remove the deleted testing profile from the local state
-          const profileIndex = profiles.value.findIndex((p) => p.id === profile.id);
+          const profileIndex = profiles.value.findIndex((p) => p._id === profile._id);
           if (profileIndex > -1) {
             const updatedTestingProfiles = profiles.value[profileIndex].testingProfiles.filter(
-              (tp) => tp.id !== testingProfile.id
+              (tp) => tp._id !== testingProfile._id
             );
             profiles.value[profileIndex].testingProfiles = updatedTestingProfiles;
           }

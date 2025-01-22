@@ -1,23 +1,40 @@
-import { TestingProfile } from "./TestingProfile";
+import { IService } from "./Service";
+import mongoose, { Schema, Document, Types } from "mongoose";
 
-export interface Service {
-  name: string;
-  version: string;
-  underTest: boolean;
-  podCount: number;
-  note?: string;
-  testGroupId?: string;
-  previousVersion?: string;
-}
 
-export interface Profile {
-  id: string;
+export interface IProfile extends Document {
   name: string;
   namespace: string;
-  services: Service[];
-  testingProfiles: TestingProfile[];
+  services: IService[];
+  testingProfiles: Types.ObjectId[]; // References to TestingProfile documents
   clusterUrl: string;
   saToken: string;
 }
 
-export const profiles: Profile[] = [];
+const ProfileSchema = new Schema<IProfile>(
+  {
+    name: { type: String, required: true },
+    namespace: { type: String, required: true },
+    services: [
+      {
+        name: { type: String, required: true },
+        version: { type: String, required: true },
+        underTest: { type: Boolean, default: false },
+        podCount: { type: Number, required: true },
+        note: { type: String },
+        testGroupId: { type: String },
+        previousVersion: { type: String },
+      },
+    ],
+    testingProfiles: [{ type: Schema.Types.ObjectId, ref: "TestingProfile" }],
+    clusterUrl: { type: String, required: true },
+    saToken: { type: String, required: true },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+export const Profile = mongoose.model<IProfile>("Profile", ProfileSchema);
+
+export const profiles: IProfile[] = [];

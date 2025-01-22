@@ -4,6 +4,7 @@ import cors from "cors";
 import profilesRoutes from "./routes/profiles";
 import createServicesRouter from "./routes/services";
 import http from "http";
+import connectDB from "./config/db";
 import WebSocketManager from "./websockets/websocketServer";
 import testingProfilesRoutes from "./routes/testingProfilesRoutes";
 
@@ -18,15 +19,9 @@ app.use(
 
 const server = http.createServer(app);
 
-// Initialize WebSocket server
 const websocketManager = new WebSocketManager(server);
 
 let monitoredNamespaces = new Set<string>();
-
-// Monitor existing profilesmonitorOpenShiftChanges
-// profiles.forEach(({ saToken, clusterUrl }) => {
-//   monitorOpenShiftChangesWithWatch(saToken, clusterUrl, websocketManager);
-// });
 
 app.get("/", (req, res) => {
   res.send("WebSocket server is running!");
@@ -35,6 +30,8 @@ app.get("/", (req, res) => {
 app.use("/api/profiles", profilesRoutes(websocketManager, monitoredNamespaces));
 app.use("/api/services", createServicesRouter(websocketManager));
 app.use("/api/testing-profiles", testingProfilesRoutes);
+
+connectDB();
 
 const PORT = 3000;
 server.listen(PORT, () => {

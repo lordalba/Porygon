@@ -1,7 +1,7 @@
-import { Profile } from "../models/profile";
+import { IProfile } from "../models/Profile";
 import { getServicesActualVersions } from "./openshiftService";
 
-export const createFullyUpdatedProfile = async (profile: Profile) => {
+export const createFullyUpdatedProfile = async (profile: IProfile) => {
   const actualData = await getServicesActualVersions(
     profile.namespace,
     profile.saToken,
