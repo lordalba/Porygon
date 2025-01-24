@@ -1,5 +1,6 @@
 import { createApp } from "vue";
 import App from "./App.vue";
+import { createPinia } from 'pinia';
 import router from "./router";
 import "./index.css";
 import "./style.css";
@@ -7,6 +8,7 @@ import Toast from "vue-toastification";
 import "vue-toastification/dist/index.css";
 import socketClient from "./websockets/websocketClient";
 
+const pinia = createPinia();
 const app = createApp(App);
 
 app.use(Toast, {
@@ -24,6 +26,7 @@ app.use(Toast, {
   icon: true,
   rtl: false,
 });
+app.use(pinia);
 
 socketClient.connect("ws://localhost:3000");
 

@@ -8,7 +8,7 @@
         <!-- Text Content -->
         <div class="text-center md:text-left mb-6 md:mb-0">
           <h1 class="text-4xl font-bold tracking-tight mb-4">
-            Welcome to Porygon!
+            <h1 v-if="userStore.user"> Hi {{ userStore.user.name }}</h1> Welcome to Porygon!
           </h1>
           <p class="text-lg mb-6">
             Simplify your integration testing with dynamic profiles and
@@ -188,8 +188,15 @@
 </template>
 
 <script>
+import { useUserStore } from "../store/userStore";
+
 export default {
   name: "Home",
+  data() {
+    return {
+      userStore: useUserStore(),
+    };
+  },
 };
 </script>
 

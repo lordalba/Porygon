@@ -9,7 +9,15 @@ export const registerUser = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  const { username, email, password, age, profession, location } = req.body;
+  const { name, email, password } = req.body;
+  console.log(
+    "yo got ze things of the name: " +
+      name +
+      " emuil: " +
+      email +
+      " paas: " +
+      password
+  );
 
   try {
     const existingUser = await User.findOne({ email });
@@ -20,14 +28,10 @@ export const registerUser = async (
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
-      username,
+      name,
       email,
       password: hashedPassword,
-      age,
-      profession,
-      location,
-      profilePictureUrl: process.env.PROFILE_PICTURE_DEFAULT_PATH,
-      backgroundPictureUrl: process.env.BACKGROUND_PICTURE_DEFAULT_PATH,
+      role: "viewer",
     });
     await newUser.save();
 
@@ -43,6 +47,8 @@ export const loginUser = async (
   res: Response
 ): Promise<Response> => {
   const { email, password } = req.body;
+
+  console.log("logging in to the user with email: " + email + " and password: " + password)
 
   try {
     const user = await User.findOne({ email });
@@ -60,7 +66,17 @@ export const loginUser = async (
       expiresIn: "1h",
     });
 
-    return res.status(200).json({ token });
+    return res
+      .status(200)
+      .json({
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+        token,
+      });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error." });
