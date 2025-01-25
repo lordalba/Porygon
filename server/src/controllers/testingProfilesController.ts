@@ -192,9 +192,22 @@ export const deleteTestingProfile = async (req: Request, res: Response) => {
     }
 
     // Remove the testing profile reference from the related profile
-    await Profile.findByIdAndUpdate(profileId, {
+    const profile = await Profile.findByIdAndUpdate(profileId, {
       $pull: { testingProfiles: id },
     });
+
+    if(!profile) return res.status(404).json({ error: "Failed to Find related profile" });
+    
+    testingProfile.services.forEach((testService) => {
+      const profileService = profile.services.find(
+        (s) => s.name === testService.name
+      );
+      if (profileService && profileService.previousVersion) {
+        profileService.version = profileService.previousVersion;
+      }
+    });
+
+    profile?.save()
 
     return res.status(204).send();
   } catch (error) {

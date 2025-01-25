@@ -88,6 +88,7 @@
         </button>
 
         <router-link
+        v-if="canUserEditProfile()"
           :to="`/profiles/update/${profile._id}`"
           class="btn btn-primary flex items-center justify-center"
         >
@@ -101,7 +102,7 @@
         class="btn btn-accent flex items-center justify-center w-full md:w-auto"
       >
         <i class="fas fa-user-shield mr-2"></i>
-        Manage Permissions
+        {{ canUserEditProfile() ? "Manage Permissions" : "View profile Participants" }}
       </button>
     </div>
 
@@ -117,6 +118,7 @@
 
 <script>
 import { ref, computed } from "vue";
+import { useUserStore } from "../../store/userStore";
 import ServiceTable from "./ServiceTable.vue";
 import PermissionsModal from "./PermissionsModal.vue";
 
@@ -131,6 +133,7 @@ export default {
   setup(props) {
     const showDetails = ref(false);
     const showPermissionsModal = ref(false);
+    const userStore = useUserStore();
 
     const toggleDetails = () => {
       showDetails.value = !showDetails.value;
@@ -138,6 +141,14 @@ export default {
 
     const openPermissionsModal = () => {
       showPermissionsModal.value = true;
+    };
+
+    const canUserEditProfile = () => {
+      const userPermissions = props.profile.permissions.find(
+        (permission) => permission.user === userStore.user.id
+      );
+
+      return userPermissions.role !== "viewer";
     };
 
     const outOfSyncCount = computed(() => {
@@ -152,6 +163,7 @@ export default {
       showPermissionsModal,
       openPermissionsModal,
       outOfSyncCount,
+      canUserEditProfile,
     };
   },
 };
