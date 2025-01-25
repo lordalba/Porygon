@@ -206,7 +206,7 @@ export default defineComponent({
     // Enhanced data fetching with error handling
     const fetchProfiles = async () => {
       try {
-        const response = await fetch("http://localhost:3000/api/profiles", {
+        const response = await fetch("http://localhost:3000/api/profiles/get/enriched", {
           headers: {
             Authorization: `Bearer ${userStore.token}`,
             "Cache-Control": "no-cache",

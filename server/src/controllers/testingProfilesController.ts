@@ -16,7 +16,7 @@ export const getAllTestingProfiles = async (req: Request, res: Response) => {
 // Create a new testing profile
 export const createTestingProfile = async (req: Request, res: Response) => {
   try {
-    const { name, profileId, services } = req.body;
+    const { name, profileId, services, createdBy } = req.body;
     console.log(
       "creating a new testing profile with this deatils: " +
         name +
@@ -38,6 +38,7 @@ export const createTestingProfile = async (req: Request, res: Response) => {
       profileId,
       services,
       isActive: false,
+      createdBy
     });
 
     // Add the testing profile to the profile's testingProfiles array

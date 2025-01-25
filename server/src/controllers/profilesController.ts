@@ -47,8 +47,22 @@ export const updateProfile = async (req: Request<{ id: string }>, res: Response)
   }
 };
 
-// Fetch all profiles
 export const getProfiles = async (req: MyUserRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+
+    const profiles = await Profile.find({
+      "permissions": { $elemMatch: { user: userId } },
+    }).populate("testingProfiles");
+
+    res.status(200).json(profiles);
+  } catch (error) {
+    console.error("Error fetching profiles:", error);
+    res.status(500).json({ error: "Failed to fetch profiles" });
+  }
+};
+
+export const getFullProfiles = async (req: MyUserRequest, res: Response) => {
   try {
     const userId = req.userId;
 

@@ -163,7 +163,7 @@
                       <h4 class="font-medium text-gray-900">
                         {{ testProfile.name }}
                       </h4>
-                      <div class="flex items-center gap-2">
+                      <div v-if="canUserEditTestingProfile(profile, testProfile)" class="flex items-center gap-2">
                         <button
                           @click="activateTestingProfile(profile, testProfile)"
                           class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
@@ -360,6 +360,7 @@ export default {
               name: newTestingProfile.name,
               profileId: modalProfile.value._id,
               services: newTestingProfile.services,
+              createdBy: userStore.user.id
             }),
           }
         );
@@ -376,6 +377,15 @@ export default {
         console.error("Error creating testing profile:", error);
         toast.error("An error occurred while creating the profile");
       }
+    };
+
+    const canUserEditTestingProfile = (profile, testingProfile) => {
+      const userPermissions = profile.permissions.find((permission) => permission.user === userStore.user.id);
+      
+      const isProfileEditor = userPermissions.role !== "viewer";
+      const isTestingProfileCreator = testingProfile.createdBy === userStore.user.id;
+
+      return isProfileEditor || isTestingProfileCreator;
     };
 
     const activateTestingProfile = async (profile, testingProfile) => {
@@ -547,6 +557,7 @@ export default {
       paginatedTestingProfiles,
       toggleTestProfileExpand,
       handleProfileCreated,
+      canUserEditTestingProfile,
     };
   },
 };

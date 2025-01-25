@@ -58,7 +58,7 @@
                       </span>
                     </div>
                   </div>
-                  <button 
+                  <button v-if="canUserRemoveOthers()" 
                     @click="removePermission(permission.user._id)"
                     class="text-red-500 hover:text-red-700 bg-red-50 dark:bg-red-900/20 p-2 rounded-full hover:bg-red-100 transition-colors"
                   >
@@ -217,6 +217,14 @@ export default {
       }
     };
 
+    const canUserRemoveOthers = () => {
+      console.log("all permissions: " + JSON.stringify(permissions.value))
+      const userPermissions = permissions.value.find((permission) => permission.user._id === userStore.user.id);
+      console.log("the perm: " + userPermissions);
+
+      return userPermissions.role !== "viewer";
+    }
+
     const close = () => emit("close");
 
     onMounted(fetchPermissions);
@@ -228,7 +236,8 @@ export default {
       addPermission, 
       removePermission, 
       close,
-      validationError 
+      validationError,
+      canUserRemoveOthers
     };
   },
 };
