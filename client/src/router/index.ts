@@ -6,6 +6,8 @@ import ProfileList from '../views/ProfileList.vue';
 
 import UpdateProfile from '../views/UpdateProfile.vue';
 import TestingProfiles from '../views/TestingProfiles.vue';
+import Login from '../views/Login.vue';
+import Signup from '../views/Signup.vue';
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
@@ -13,6 +15,8 @@ const routes = [
   { path: "/profiles", name: "ProfileList", component: ProfileList },
   { path: '/deploy/:profileName', name: 'DeployProfile', component: DeployProfile },
   { path: '/manage-testing', name: 'manageTesting', component: TestingProfiles },
+  { path: '/login', name: 'Login', component: Login },
+  { path: '/sign-up', name: 'SignUp', component: Signup },
   {
     path: '/profiles/update/:id', // Add the update route
     name: 'UpdateProfile',

@@ -1,30 +1,67 @@
 <template>
   <div
-    class="bg-gray-50 shadow-md rounded-lg p-6 border transition-transform transform hover:scale-105"
+    class="profile-card bg-white shadow-lg rounded-xl overflow-hidden transition-all duration-300 hover:shadow-xl"
   >
-    <!-- Profile Summary -->
-    <div class="flex justify-between items-center">
-      <div>
-        <h2 class="text-xl font-bold">{{ profile.name }}</h2>
-        <p class="text-gray-600 text-sm">Namespace: {{ profile.namespace }}</p>
-        <p class="text-gray-500 text-sm">
-          Total Services: {{ profile.services.length }}
-        </p>
-      </div>
+    <!-- Header Section -->
+    <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-2xl font-semibold text-gray-800">
+            {{ profile.name }}
+          </h2>
+          <div class="flex items-center space-x-2 mt-1">
+            <span class="text-gray-500 text-sm">
+              <i class="fas fa-layer-group mr-1"></i>
+              Namespace: {{ profile.namespace }}
+            </span>
+            <span class="text-gray-500 text-sm">
+              <i class="fas fa-cubes mr-1"></i>
+              Services: {{ profile.services.length }}
+            </span>
+          </div>
+        </div>
 
-      <div>
-        <button @click="toggleDetails" class="text-blue-500 underline text-sm">
-          {{ showDetails ? "Hide Details" : "View Details" }}
+        <button
+          @click="toggleDetails"
+          class="btn-toggle text-blue-600 hover:text-blue-800 transition-colors"
+        >
+          <span class="flex items-center">
+            {{ showDetails ? "Hide Details" : "View Details" }}
+            <i
+              :class="
+                showDetails
+                  ? 'fas fa-chevron-up ml-2'
+                  : 'fas fa-chevron-down ml-2'
+              "
+            ></i>
+          </span>
         </button>
       </div>
     </div>
 
-    <!-- Synchronization Summary -->
-    <div class="mt-4">
-      <p v-if="outOfSyncCount > 0" class="text-red-500 text-sm">
-        {{ outOfSyncCount }} service(s) are out of sync.
-      </p>
-      <p v-else class="text-green-500 text-sm">All services are in sync.</p>
+    <!-- Synchronization Status -->
+    <div class="px-6 py-3 bg-gray-50 border-b">
+      <div
+        :class="[
+          'p-2 rounded-md text-sm flex items-center',
+          outOfSyncCount > 0
+            ? 'bg-red-50 text-red-600'
+            : 'bg-green-50 text-green-600',
+        ]"
+      >
+        <i
+          :class="
+            outOfSyncCount > 0
+              ? 'fas fa-exclamation-triangle mr-2'
+              : 'fas fa-check-circle mr-2'
+          "
+        ></i>
+        {{
+          outOfSyncCount > 0
+            ? `${outOfSyncCount} service(s) are out of sync`
+            : "All services are in sync"
+        }}
+      </div>
     </div>
 
     <!-- Service Table -->
@@ -32,33 +69,61 @@
       v-if="showDetails"
       :services="profile.services"
       @sync-service="$emit('sync-service', profile, $event)"
+      class="transition-all duration-300 ease-in-out"
     />
 
-    <!-- Profile Actions -->
-    <div class="mt-4 flex justify-between items-center">
+    <!-- Action Buttons -->
+    <div
+      class="p-6 bg-gray-100 flex flex-col md:flex-row md:justify-between items-center space-y-3 md:space-y-0"
+    >
+      <div
+        class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3 w-full md:w-auto"
+      >
+        <button
+          @click="$emit('sync-all', profile.name)"
+          class="btn btn-success flex items-center justify-center"
+        >
+          <i class="fas fa-sync mr-2"></i>
+          Sync All
+        </button>
+
+        <router-link
+        v-if="canUserEditProfile()"
+          :to="`/profiles/update/${profile._id}`"
+          class="btn btn-primary flex items-center justify-center"
+        >
+          <i class="fas fa-edit mr-2"></i>
+          Edit Profile
+        </router-link>
+      </div>
+
       <button
-        @click="$emit('sync-all', profile.name)"
-        class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-sm"
+        @click="openPermissionsModal"
+        class="btn btn-accent flex items-center justify-center w-full md:w-auto"
       >
-        Sync All
+        <i class="fas fa-user-shield mr-2"></i>
+        {{ canUserEditProfile() ? "Manage Permissions" : "View profile Participants" }}
       </button>
-      <!-- Edit Profile Button -->
-      <router-link
-        :to="`/profiles/update/${profile.id}`"
-        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm"
-      >
-        Edit Profile
-      </router-link>
     </div>
+
+    <!-- Permissions Modal -->
+    <PermissionsModal
+      :show="showPermissionsModal"
+      :profile-id="profile._id"
+      :profile-name="profile.name"
+      @close="showPermissionsModal = false"
+    />
   </div>
 </template>
 
 <script>
 import { ref, computed } from "vue";
+import { useUserStore } from "../../store/userStore";
 import ServiceTable from "./ServiceTable.vue";
+import PermissionsModal from "./PermissionsModal.vue";
 
 export default {
-  components: { ServiceTable },
+  components: { ServiceTable, PermissionsModal },
   props: {
     profile: {
       type: Object,
@@ -67,9 +132,23 @@ export default {
   },
   setup(props) {
     const showDetails = ref(false);
+    const showPermissionsModal = ref(false);
+    const userStore = useUserStore();
 
     const toggleDetails = () => {
       showDetails.value = !showDetails.value;
+    };
+
+    const openPermissionsModal = () => {
+      showPermissionsModal.value = true;
+    };
+
+    const canUserEditProfile = () => {
+      const userPermissions = props.profile.permissions.find(
+        (permission) => permission.user === userStore.user.id
+      );
+
+      return userPermissions.role !== "viewer";
     };
 
     const outOfSyncCount = computed(() => {
@@ -78,10 +157,48 @@ export default {
       ).length;
     });
 
-    return { showDetails, toggleDetails, outOfSyncCount };
-  },
-
-  methods: {
+    return {
+      showDetails,
+      toggleDetails,
+      showPermissionsModal,
+      openPermissionsModal,
+      outOfSyncCount,
+      canUserEditProfile,
+    };
   },
 };
 </script>
+<style scoped>
+/* Custom button styles */
+.btn {
+  @apply px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:scale-105;
+}
+
+.btn-success {
+  @apply bg-green-500 text-white hover:bg-green-600;
+}
+
+.btn-primary {
+  @apply bg-blue-500 text-white hover:bg-blue-600;
+}
+
+.btn-accent {
+  @apply bg-indigo-500 text-white hover:bg-indigo-600;
+}
+
+.btn-toggle {
+  @apply bg-transparent border border-blue-200 rounded-md px-3 py-1 hover:bg-blue-50;
+}
+
+/* Card hover and transition effects */
+.profile-card {
+  @apply transform transition-all duration-300 hover:-translate-y-1;
+}
+
+/* Responsive spacing for action buttons */
+@media (max-width: 768px) {
+  .btn {
+    @apply w-full;
+  }
+}
+</style>

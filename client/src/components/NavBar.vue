@@ -13,6 +13,7 @@
           class="hidden md:flex space-x-4 absolute left-1/2 transform -translate-x-1/2"
         >
           <router-link
+          v-if="userStore.user"
             to="/"
             class="px-3 py-1 text-sm font-medium rounded-md hover:bg-blue-600 transition"
             active-class="bg-blue-700"
@@ -20,6 +21,7 @@
             Home
           </router-link>
           <router-link
+          v-if="userStore.user"
             to="/profiles"
             class="px-3 py-1 text-sm font-medium rounded-md hover:bg-blue-600 transition"
             active-class="bg-blue-700"
@@ -27,21 +29,38 @@
             Profiles
           </router-link>
           <router-link
+          v-if="userStore.user"
             to="/manage-testing"
             class="px-3 py-1 text-sm font-medium rounded-md hover:bg-blue-600 transition"
             active-class="bg-blue-700"
           >
-          Manage Testing
+            Manage Testing
           </router-link>
           <router-link
+          v-if="userStore.user"
             to="/upload"
             class="px-3 py-1 text-sm font-medium rounded-md hover:bg-blue-600 transition"
             active-class="bg-blue-700"
           >
-            Upload Profile
+            Create Profile
           </router-link>
         </div>
-
+        <router-link
+          v-if="!userStore.user"
+          to="/login"
+          class="px-3 py-1 text-sm font-medium rounded-md justify-end hover:bg-blue-600 transition"
+          active-class="bg-blue-700"
+        >
+          <i class="fa-regular fa-user"></i>
+        </router-link>
+        <div
+          v-else
+          @click="logoutUser"
+          class="px-3 py-1 text-sm font-medium rounded-md justify-end hover:bg-blue-600 transition"
+          active-class="bg-blue-700"
+        >
+        <i class="fa-solid fa-right-from-bracket"></i>
+        </div>
         <!-- Mobile Menu Button -->
         <div class="md:hidden">
           <button
@@ -89,17 +108,25 @@
 
 <script lang="ts">
 import { defineComponent, ref } from "vue";
+import { useUserStore } from "../store/userStore";
 
 export default defineComponent({
   setup() {
     const isMenuOpen = ref(false);
+    const userStore = useUserStore();
 
     const toggleMenu = () => {
       isMenuOpen.value = !isMenuOpen.value;
     };
 
-    return { isMenuOpen, toggleMenu };
+    return { isMenuOpen, toggleMenu, userStore };
   },
+  methods: {
+    logoutUser() {
+      this.userStore.logout();
+      this.$router.push("/");
+    }
+  }
 });
 </script>
 

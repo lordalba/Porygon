@@ -16,7 +16,7 @@ export const getAllTestingProfiles = async (req: Request, res: Response) => {
 // Create a new testing profile
 export const createTestingProfile = async (req: Request, res: Response) => {
   try {
-    const { name, profileId, services } = req.body;
+    const { name, profileId, services, createdBy } = req.body;
     console.log(
       "creating a new testing profile with this deatils: " +
         name +
@@ -38,6 +38,7 @@ export const createTestingProfile = async (req: Request, res: Response) => {
       profileId,
       services,
       isActive: false,
+      createdBy
     });
 
     // Add the testing profile to the profile's testingProfiles array
@@ -191,9 +192,22 @@ export const deleteTestingProfile = async (req: Request, res: Response) => {
     }
 
     // Remove the testing profile reference from the related profile
-    await Profile.findByIdAndUpdate(profileId, {
+    const profile = await Profile.findByIdAndUpdate(profileId, {
       $pull: { testingProfiles: id },
     });
+
+    if(!profile) return res.status(404).json({ error: "Failed to Find related profile" });
+    
+    testingProfile.services.forEach((testService) => {
+      const profileService = profile.services.find(
+        (s) => s.name === testService.name
+      );
+      if (profileService && profileService.previousVersion) {
+        profileService.version = profileService.previousVersion;
+      }
+    });
+
+    profile?.save()
 
     return res.status(204).send();
   } catch (error) {
