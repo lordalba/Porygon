@@ -263,6 +263,7 @@ import { useToast } from "vue-toastification";
 import { useUserStore } from "../store/userStore";
 import ExpandedProfileCard from "../components/ExpandedProfileCard.vue";
 import CreateTestingProfileModal from "../components/testingProfiles/CreateTestingProfileModal.vue";
+import { getConfig } from "../config";
 
 export default {
   name: "TestingProfiles",
@@ -284,7 +285,7 @@ export default {
 
     const fetchProfiles = async () => {
       try {
-        const response = await fetch("http://localhost:3000/api/profiles", {
+        const response = await fetch(`${getConfig().apiUrl}/profiles`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${userStore.token}`,
@@ -352,7 +353,7 @@ export default {
 
       try {
         const response = await fetch(
-          "http://localhost:3000/api/testing-profiles",
+          `${getConfig().apiUrl}/testing-profiles`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -392,7 +393,7 @@ export default {
       try {
         const endpoint = testingProfile.isActive ? "deactivate" : "activate";
         const response = await fetch(
-          `http://localhost:3000/api/testing-profiles/${endpoint}`,
+          `${getConfig().apiUrl}/testing-profiles/${endpoint}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -405,7 +406,7 @@ export default {
 
         if (response.ok) {
           const updatedProfileResponse = await fetch(
-            `http://localhost:3000/api/profiles/${profile._id}`,
+            `${getConfig().apiUrl}/profiles/${profile._id}`,
             {
               method: "GET",
               headers: {
@@ -443,7 +444,7 @@ export default {
     const deleteTestingProfile = async (profile, testingProfile) => {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/testing-profiles/${testingProfile._id}`,
+          `${getConfig().apiUrl}/testing-profiles/${testingProfile._id}`,
           {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },

@@ -43,6 +43,8 @@
   </template>
   
   <script>
+  import { getConfig } from "../config";
+
   export default {
     props: {
       profileName: {
@@ -61,7 +63,7 @@
         this.loading = true;
         try {
           const response = await fetch(
-            `http://localhost:3000/api/sync-logs?profileName=${encodeURIComponent(
+            `${getConfig().apiUrl}/sync-logs?profileName=${encodeURIComponent(
               this.profileName
             )}`
           );

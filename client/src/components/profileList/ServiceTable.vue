@@ -9,7 +9,6 @@
           <th class="border border-gray-300 p-2 text-left">Desired Pods</th>
           <th class="border border-gray-300 p-2 text-left">Actual Pods</th>
           <th class="border border-gray-300 p-2 text-left">Status</th>
-          <th class="border border-gray-300 p-2 text-left">Readiness</th>
           <th class="border border-gray-300 p-2 text-left">Actions</th>
         </tr>
       </thead>
@@ -37,13 +36,6 @@
               <span v-if="service.underTest" class="italic">(Under Test)</span>
             </span>
           </td>
-          <td class="border border-gray-300 p-2">
-            <span
-              class="inline-block px-2 py-1 rounded text-xs bg-green-200 text-green-800"
-            >
-              Ready
-            </span>
-          </td>
           <td class="border border-gray-300 p-2 flex gap-2">
             <button
               :disabled="isSyncUnneeded(service)"
@@ -62,6 +54,7 @@
 
 <script>
 import { defineComponent } from "vue";
+import TestingProfiles from "../../views/TestingProfiles.vue";
 
 export default defineComponent({
   props: {
@@ -69,6 +62,10 @@ export default defineComponent({
       type: Array,
       required: true,
     },
+    TestingProfiles: {
+      type: Array,
+      required: true,
+    }
   },
   setup(props) {
     const getStatusClass = (service) => {
@@ -79,7 +76,7 @@ export default defineComponent({
     };
 
     const isSyncUnneeded = (service) => {
-      return service.status.trim() === "In Sync" || service.underTest;
+      return service.status === "In Sync" || service.underTest;
     };
 
     return {

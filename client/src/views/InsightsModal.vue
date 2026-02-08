@@ -84,6 +84,7 @@
 
 <script>
 import { ref, onMounted } from "vue";
+import { getConfig } from "../config";
 
 export default {
   name: "InsightsModal",
@@ -100,7 +101,7 @@ export default {
     const fetchProfileWithInsights = async () => {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/profiles/${props.profileId}`
+          `${getConfig().apiUrl}/profiles/${props.profileId}`
         );
         if (!response.ok) {
           console.error("Failed to fetch profile insights.");

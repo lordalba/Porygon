@@ -163,21 +163,21 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <p>&copy; 2025 Porygon. All rights reserved.</p>
         <div class="flex justify-center space-x-4 mt-4">
-          <a href="#" class="social-icon hover:text-gray-200">
+          <a href="https://mi/api/v1/people/image/s8664220" class="social-icon hover:text-gray-200">
             <img
-              src="https://img.icons8.com/ios-filled/24/ffffff/facebook--v1.png"
+              src="https://mi/api/v1/people/image/s8664220"
               alt="Facebook"
             />
           </a>
-          <a href="#" class="social-icon hover:text-gray-200">
+          <a href="https://mi/api/v1/people/image/s8664420" class="social-icon hover:text-gray-200">
             <img
-              src="https://img.icons8.com/ios-filled/24/ffffff/twitter.png"
+              src="https://mi/api/v1/people/image/s8664420"
               alt="Twitter"
             />
           </a>
-          <a href="#" class="social-icon hover:text-gray-200">
+          <a href="https://mi/api/v1/people/image/s7086424" class="social-icon hover:text-gray-200">
             <img
-              src="https://img.icons8.com/ios-filled/24/ffffff/linkedin.png"
+              src="https://mi/api/v1/people/image/s7086424"
               alt="LinkedIn"
             />
           </a>
@@ -189,6 +189,7 @@
 
 <script>
 import { useUserStore } from "../store/userStore";
+import { getConfig } from "../config.js";
 
 export default {
   name: "Home",

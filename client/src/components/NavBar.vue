@@ -59,7 +59,7 @@
           class="px-3 py-1 text-sm font-medium rounded-md justify-end hover:bg-blue-600 transition"
           active-class="bg-blue-700"
         >
-        <i class="fa-solid fa-right-from-bracket"></i>
+        log out
         </div>
         <!-- Mobile Menu Button -->
         <div class="md:hidden">

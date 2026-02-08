@@ -15,9 +15,15 @@ export default {
 };
 </script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&family=Lilita+One&family=Pacifico&display=swap');
+
+@font-face {
+  font-family: "Lexend-Regular";
+  src: url('./assets/Lexend-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
 
 #app {
-  font-family: "Lexend", sans-serif;
+  font-family: "Lexend-Regular", sans-serif;
 }
 </style>

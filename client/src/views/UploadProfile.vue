@@ -5,18 +5,31 @@
         Create and Upload Profile
       </h1>
 
-      <!-- Profile Details -->
+      <!-- Step 1: Connection Method -->
+      <OpenShiftAccessSelector
+        v-model:method="connectionMethod"
+        v-model:serviceAccountName="profile.serviceAccountName"
+        v-model:role="profile.role"
+        v-model:userToken="profile.userToken"
+        v-model:clusterUrl="profile.clusterUrl"
+        :namespace="profile.namespace"
+        @verified="connectionVerified = true"
+        :errors="errors"
+      />
+
+      <!-- Step 2: Profile Details -->
       <ProfileDetails
         :profile="profile"
         :errors="errors"
         @update-profile="updateProfileDetails"
+        :disabled="!connectionVerified"
       />
 
-      <!-- Fetch Services Button -->
+      <!-- Step 3: Fetch Services -->
       <div class="my-4">
         <button
           @click="fetchServices"
-          :disabled="fetching"
+          :disabled="fetching || !connectionVerified"
           class="px-4 py-2 bg-blue-500 text-white font-bold rounded hover:bg-blue-600 transition disabled:bg-blue-300"
         >
           {{
@@ -25,7 +38,7 @@
         </button>
       </div>
 
-      <!-- Services Table -->
+      <!-- Step 4: Services Table -->
       <ServicesTable
         :services="profile.services"
         :errors="errors.services"
@@ -35,7 +48,6 @@
         @update-service="updateService"
       />
 
-      <!-- Toggle Pod Count -->
       <div class="mt-6 mb-4">
         <label class="flex items-center space-x-2">
           <input
@@ -47,7 +59,6 @@
         </label>
       </div>
 
-      <!-- Save and Submit Buttons -->
       <div class="flex flex-col md:flex-row mt-6 gap-4">
         <button
           @click="saveDraft"
@@ -58,7 +69,7 @@
         </button>
         <button
           @click="submitProfile"
-          :disabled="loading"
+          :disabled="loading || !connectionVerified"
           class="flex-1 px-4 py-2 bg-blue-500 text-white font-bold rounded hover:bg-blue-600 transition disabled:bg-blue-300"
         >
           {{ loading ? "Submitting..." : "Submit Profile" }}
@@ -71,12 +82,14 @@
 <script lang="ts">
 import { defineComponent, reactive, ref, onMounted } from "vue";
 import { useToast } from "vue-toastification";
+import { useUserStore } from "../store/userStore";
 import ProfileDetails from "../components/uploadProfile/ProfileDetails.vue";
 import ServicesTable from "../components/uploadProfile/ServicesTable.vue";
-import { useUserStore } from "../store/userStore";
+import OpenShiftAccessSelector from "../components/uploadProfile/OpenShiftAccessSelector.vue";
+import { getConfig } from "../config";
 
 export default defineComponent({
-  components: { ProfileDetails, ServicesTable },
+  components: { ProfileDetails, ServicesTable, OpenShiftAccessSelector },
   setup() {
     const toast = useToast();
     const userStore = useUserStore();
@@ -86,6 +99,8 @@ export default defineComponent({
       namespace: "",
       userToken: "",
       clusterUrl: "",
+      serviceAccountName: "",
+      role: "viewer",
       services: [] as Array<{
         name: string;
         version: string;
@@ -106,33 +121,20 @@ export default defineComponent({
       }>,
     });
 
-    const enablePodCount = ref(false); // Toggle for pod count
+    const connectionMethod = ref("default");
+    const connectionVerified = ref(false);
+    const enablePodCount = ref(false);
     const loading = ref(false);
     const fetching = ref(false);
 
-    const updateProfileDetails = (details: {
-      name: string;
-      namespace: string;
-      userToken: string;
-      clusterUrl: string;
-    }) => {
-      profile.name = details.name;
-      profile.namespace = details.namespace;
-      profile.userToken = details.userToken;
-      profile.clusterUrl = details.clusterUrl;
+    const updateProfileDetails = (details: any) => {
+      Object.assign(profile, details);
     };
 
     const fetchServices = async () => {
-      if (!profile.namespace || !profile.userToken || !profile.clusterUrl) {
-        toast.error(
-          "Namespace, Cluster URL, and API Token are required to fetch services."
-        );
-        return;
-      }
-
       fetching.value = true;
       try {
-        const response = await fetch("http://localhost:3000/api/services", {
+        const response = await fetch(`${getConfig().apiUrl}/services`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${userStore.token}`,
@@ -145,20 +147,17 @@ export default defineComponent({
           }),
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch services.");
-        }
+        if (!response.ok) throw new Error("Failed to fetch services.");
 
         const data = await response.json();
         profile.services = data.serviceNames.map((name: string) => ({
           name,
           version: "",
-          podCount: 1, // Default pod count
+          podCount: 1,
           underTest: false,
         }));
         toast.success("Services fetched successfully!");
       } catch (error) {
-        console.error(error);
         toast.error("Error fetching services. Please try again.");
       } finally {
         fetching.value = false;
@@ -166,12 +165,7 @@ export default defineComponent({
     };
 
     const addService = () => {
-      profile.services.push({
-        name: "",
-        version: "",
-        podCount: 1,
-        underTest: false,
-      });
+      profile.services.push({ name: "", version: "", podCount: 1, underTest: false });
       errors.services.push({});
     };
 
@@ -180,10 +174,7 @@ export default defineComponent({
       errors.services.splice(index, 1);
     };
 
-    const updateService = (
-      index: number,
-      service: { name: string; version: string; podCount?: number }
-    ) => {
+    const updateService = (index: number, service: any) => {
       profile.services[index] = service;
     };
 
@@ -192,43 +183,14 @@ export default defineComponent({
       toast.success("Draft saved successfully!");
     };
 
-    const validate = (): boolean => {
-      let valid = true;
-
-      errors.profileName = profile.name ? "" : "Profile name is required.";
-      errors.namespace = profile.namespace ? "" : "Namespace is required.";
-      errors.userToken = profile.userToken ? "" : "API Token is required.";
-      errors.clusterUrl = profile.clusterUrl ? "" : "Cluster URL is required.";
-
-      errors.services = profile.services.map((service) => {
-        const error: { name?: string; version?: string; podCount?: string } =
-          {};
-        if (!service.name) error.name = "Service name is required.";
-        if (!service.version) error.version = "Version is required.";
-        if (
-          enablePodCount.value &&
-          (!service.podCount || service.podCount < 1)
-        ) {
-          error.podCount = "Pod count must be at least 1.";
-        }
-        if (Object.keys(error).length > 0) valid = false;
-        return error;
-      });
-
-      return valid;
-    };
-
     const submitProfile = async () => {
       if (!validate()) {
-        toast.error(
-          "Validation failed. Please correct the errors and try again."
-        );
+        toast.error("Validation failed. Please correct the errors and try again.");
         return;
       }
-
       loading.value = true;
       try {
-        const response = await fetch("http://localhost:3000/api/profiles", {
+        const response = await fetch(`${getConfig().apiUrl}/profiles`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${userStore.token}`,
@@ -236,25 +198,36 @@ export default defineComponent({
           },
           body: JSON.stringify(profile),
         });
-        if (response.ok) {
-          const data = await response.json();
-          toast.success(
-            `Profile "${data.profile.name}" uploaded successfully!`
-          );
-          profile.name = "";
-          profile.namespace = "";
-          profile.userToken = "";
-          profile.clusterUrl = "";
-          profile.services = [];
-          errors.services = [];
-        } else {
-          toast.error("Failed to upload profile.");
-        }
+        if (!response.ok) throw new Error();
+
+        const data = await response.json();
+        toast.success(`Profile "${data.profile.name}" uploaded successfully!`);
+        Object.assign(profile, { name: "", namespace: "", userToken: "", clusterUrl: "", services: [] });
+        errors.services = [];
       } catch (error) {
         toast.error("Error uploading profile.");
       } finally {
         loading.value = false;
       }
+    };
+
+    const validate = (): boolean => {
+      let valid = true;
+      errors.profileName = profile.name ? "" : "Profile name is required.";
+      errors.namespace = profile.namespace ? "" : "Namespace is required.";
+      errors.userToken = profile.userToken ? "" : "API Token is required.";
+      errors.clusterUrl = profile.clusterUrl ? "" : "Cluster URL is required.";
+      errors.services = profile.services.map((service) => {
+        const error: any = {};
+        if (!service.name) error.name = "Service name is required.";
+        if (!service.version) error.version = "Version is required.";
+        if (enablePodCount.value && (!service.podCount || service.podCount < 1)) {
+          error.podCount = "Pod count must be at least 1.";
+        }
+        if (Object.keys(error).length > 0) valid = false;
+        return error;
+      });
+      return valid;
     };
 
     onMounted(() => {
@@ -268,6 +241,8 @@ export default defineComponent({
       loading,
       fetching,
       enablePodCount,
+      connectionMethod,
+      connectionVerified,
       updateProfileDetails,
       fetchServices,
       addService,

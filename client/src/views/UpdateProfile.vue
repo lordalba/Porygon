@@ -175,6 +175,7 @@ import { defineComponent, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useToast } from "vue-toastification";
 import { useUserStore } from "../store/userStore";
+import { getConfig } from "../config";
 
 export default defineComponent({
   name: "UpdateProfile",
@@ -187,7 +188,7 @@ export default defineComponent({
     const profile = ref({
       name: "",
       namespace: "",
-      services: [],
+      services: <any[]>[],
     });
 
     const newService = ref({
@@ -199,7 +200,7 @@ export default defineComponent({
     const fetchProfile = async () => {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/profiles/${route.params.id}`,
+          `${getConfig().apiUrl}/profiles/${route.params.id}`,
           {
             method: "GET",
             headers: {
@@ -235,7 +236,7 @@ export default defineComponent({
     const saveProfile = async () => {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/profiles/${route.params.id}`,
+          `${getConfig().apiUrl}/profiles/${route.params.id}`,
           {
             method: "PUT",
             headers: {

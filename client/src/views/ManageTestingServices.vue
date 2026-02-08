@@ -115,7 +115,7 @@
                 desired form?
               </p>
               <ul class="list-disc list-inside text-gray-700 mb-4">
-                <li v-for="service in selectedGroup" :key="service.name">
+                <li v-for="service in selectedServices" :key="service.name">
                   {{ service.name }}
                 </li>
               </ul>
@@ -240,25 +240,27 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, computed } from "vue";
+import { defineComponent, ref, onMounted } from "vue";
 import { useToast } from "vue-toastification";
 import { useRouter } from "vue-router";
+import { getConfig } from "../config";
 
 export default defineComponent({
   name: "ManageTestingServices",
   setup() {
     const router = useRouter();
     const toast = useToast();
-    const profiles = ref([]);
+    const profiles = ref<any[]>([]);
     const showModal = ref(false);
     const modalNote = ref("");
-    const modalProfile = ref(null);
-    const groupSearch = ref({}); // Store group-specific searches
+    const modalProfile = ref<any>(null);
+    const groupSearch = ref<Record<number, string>>({}); // Store group-specific searches
     const showConfirmationModal = ref(false);
+    const selectedServices = ref<any[]>([]); // Added reactive selectedServices for confirmation modal
 
     const fetchProfiles = async () => {
       try {
-        const response = await fetch("http://localhost:3000/api/profiles");
+        const response = await fetch(`${getConfig().apiUrl}/profiles`);
         if (response.ok) {
           profiles.value = (await response.json()).map((profile: any) => ({
             ...profile,
@@ -301,7 +303,7 @@ export default defineComponent({
       );
     };
 
-    const filteredGroupServices = (group: any, groupId: string) => {
+    const filteredGroupServices = (group: any, groupId: number) => {
       const query = groupSearch.value[groupId]?.toLowerCase() || "";
       return group.filter((service: any) =>
         service.name.toLowerCase().includes(query)
@@ -346,17 +348,17 @@ export default defineComponent({
     };
 
     const confirmNote = async () => {
-      const selectedServices = modalProfile.value.selectedServices;
+      const selectedServicesLocal = modalProfile.value.selectedServices;
       const namespace = modalProfile.value.namespace;
       try {
         const response = await fetch(
-          "http://localhost:3000/api/services/update-testing",
+          `${getConfig().apiUrl}/services/update-testing`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               namespace,
-              services: selectedServices,
+              services: selectedServicesLocal,
               note: modalNote.value,
               underTest: true,
             }),
@@ -365,7 +367,7 @@ export default defineComponent({
 
         if (response.ok) {
           toast.success("Services updated with note successfully.");
-          selectedServices.forEach((serviceName: string) => {
+          selectedServicesLocal.forEach((serviceName: string) => {
             const service = modalProfile.value.services.find(
               (s: any) => s.name === serviceName
             );
@@ -389,7 +391,7 @@ export default defineComponent({
     const removeServiceFromTest = async (profile: any, service: any) => {
       try {
         const response = await fetch(
-          "http://localhost:3000/api/services/update-testing",
+          `${getConfig().apiUrl}/services/update-testing`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -406,6 +408,8 @@ export default defineComponent({
           service.underTest = false;
           service.note = "";
           toast.success(`Removed "${service.name}" from testing.`);
+          // populate confirmation list and show modal
+          selectedServices.value = [service];
           showConfirmationModal.value = true;
         } else {
           toast.error("Failed to remove service from testing.");
@@ -420,7 +424,7 @@ export default defineComponent({
       const servicesToRemove = group;
       try {
         const response = await fetch(
-          "http://localhost:3000/api/services/update-testing",
+          `${getConfig().apiUrl}/services/update-testing`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -439,6 +443,8 @@ export default defineComponent({
             service.note = "";
           });
           toast.success("Removed all services from group testing.");
+          // populate confirmation list and show modal
+          selectedServices.value = servicesToRemove;
           showConfirmationModal.value = true;
         } else {
           toast.error("Failed to remove group from testing.");
@@ -473,6 +479,7 @@ export default defineComponent({
       modalNote,
       modalProfile,
       showConfirmationModal,
+      selectedServices,
       openNoteModal,
       closeNoteModal,
       confirmNote,

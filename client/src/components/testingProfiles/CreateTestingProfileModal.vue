@@ -106,6 +106,7 @@
   
   <script>
   import { ref } from "vue";
+  import { getConfig } from "../../config";
   
   export default {
     props: {
@@ -144,7 +145,7 @@
         }
   
         try {
-          const response = await fetch("http://localhost:3000/api/testing-profiles", {
+          const response = await fetch(`${getConfig().apiUrl}/testing-profiles`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
