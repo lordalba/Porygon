@@ -14,6 +14,7 @@ import TestingProfiles from '../views/TestingProfiles.vue';
 import Login from '../views/Login.vue';
 // @ts-ignore
 import Signup from '../views/Signup.vue';
+import Logs from '../views/Logs.vue';
 
 const routes = [
   { path: '/', name: 'Home', component: Home, meta: {title:"Home", favicon: tabIcon} },
@@ -29,6 +30,12 @@ const routes = [
     component: UpdateProfile,
     props: true, // Pass route params as props to the component
     meta: {title:"Upload Profile", favicon: tabIcon} 
+  },
+  {
+    path: '/profiles/logs/:id', // Add the update route
+    name: 'ProfileLogs',
+    component: Logs,
+    props: true, // Pass route params as props to the component
   },
 ];
 

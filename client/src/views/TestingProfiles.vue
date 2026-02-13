@@ -163,7 +163,10 @@
                       <h4 class="font-medium text-gray-900">
                         {{ testProfile.name }}
                       </h4>
-                      <div v-if="canUserEditTestingProfile(profile, testProfile)" class="flex items-center gap-2">
+                      <div
+                        v-if="canUserEditTestingProfile(profile, testProfile)"
+                        class="flex items-center gap-2"
+                      >
                         <button
                           @click="activateTestingProfile(profile, testProfile)"
                           class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
@@ -361,7 +364,7 @@ export default {
               name: newTestingProfile.name,
               profileId: modalProfile.value._id,
               services: newTestingProfile.services,
-              createdBy: userStore.user.id
+              createdBy: userStore.user.id,
             }),
           }
         );
@@ -381,10 +384,13 @@ export default {
     };
 
     const canUserEditTestingProfile = (profile, testingProfile) => {
-      const userPermissions = profile.permissions.find((permission) => permission.user === userStore.user.id);
-      
+      const userPermissions = profile.permissions.find(
+        (permission) => permission.user === userStore.user.id
+      );
+
       const isProfileEditor = userPermissions.role !== "viewer";
-      const isTestingProfileCreator = testingProfile.createdBy === userStore.user.id;
+      const isTestingProfileCreator =
+        testingProfile.createdBy === userStore.user.id;
 
       return isProfileEditor || isTestingProfileCreator;
     };
@@ -396,7 +402,10 @@ export default {
           `${getConfig().apiUrl}/testing-profiles/${endpoint}`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              Authorization: `Bearer ${userStore.token}`,
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify({
               profileId: profile._id,
               testingProfileId: testingProfile._id,
