@@ -2,6 +2,9 @@ import axios from "axios";
 import { exec } from "child_process";
 import WebSocketManager from "../websockets/websocketServer";
 
+const PORYGON_ROLE_NAME = "porygon-deployment-editor";
+const PORYGON_ROLEBINDING_NAME = "porygon-deployment-editor-binding";
+
 export const checkUserPermissions = async (
   namespace: string,
   saToken: string,
@@ -171,6 +174,9 @@ export const setupNamespaceAccessWithUserAuth = async (
       clusterUrl
     );
 
+    // ✅ NEW: give SA permissions to patch deployments + scale
+    await ensurePorygonRbac(namespace, serviceAccountName, userToken, clusterUrl);
+
     const saToken = await createServiceAccountTokenWithUserAuth(
       namespace,
       serviceAccountName
@@ -182,6 +188,187 @@ export const setupNamespaceAccessWithUserAuth = async (
     throw error;
   }
 };
+
+/**
+ * Ensure the ServiceAccount has just enough permissions to sync Deployments.
+ * This is REQUIRED for PATCH on deployments and scaling.
+ *
+ * Uses the *userToken* (not the SA token) because at this point the SA has no permissions yet.
+ */
+export const ensurePorygonRbac = async (
+  namespace: string,
+  serviceAccountName: string,
+  userToken: string,
+  clusterUrl: string
+): Promise<void> => {
+  await ensureRoleExists(namespace, userToken, clusterUrl);
+  await ensureRoleBindingExists(namespace, serviceAccountName, userToken, clusterUrl);
+};
+
+const desiredRole = (namespace: string) => ({
+  apiVersion: "rbac.authorization.k8s.io/v1",
+  kind: "Role",
+  metadata: {
+    name: PORYGON_ROLE_NAME,
+    namespace,
+  },
+  rules: [
+    {
+      apiGroups: ["apps"],
+      resources: ["deployments"],
+      verbs: ["get", "list", "watch", "patch", "update"],
+    },
+    {
+      apiGroups: ["apps"],
+      resources: ["deployments/scale"],
+      verbs: ["get", "update", "patch"],
+    },
+    // ✅ needed for getServicesActualVersions
+    {
+      apiGroups: [""],
+      resources: ["pods"],
+      verbs: ["get", "list", "watch"],
+    },
+  ],
+});
+
+const ensureRoleExists = async (
+  namespace: string,
+  userToken: string,
+  clusterUrl: string
+): Promise<void> => {
+  const roleObj = desiredRole(namespace);
+
+  const roleUrl = `${clusterUrl}/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/roles/${PORYGON_ROLE_NAME}`;
+
+  const getResp = await fetch(roleUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (getResp.status === 404) {
+    // Create role
+    const createUrl = `${clusterUrl}/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/roles`;
+    const createResp = await fetch(createUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${userToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(roleObj),
+    });
+
+    if (!createResp.ok) {
+      const t = await createResp.text();
+      throw new Error(
+        `Failed to create Role "${PORYGON_ROLE_NAME}": ${createResp.status} ${createResp.statusText} - ${t}`
+      );
+    }
+
+    console.log(
+      `Role "${PORYGON_ROLE_NAME}" created successfully in namespace "${namespace}".`
+    );
+    return;
+  }
+
+  if (!getResp.ok) {
+    const t = await getResp.text();
+    throw new Error(
+      `Failed to check Role existence: ${getResp.status} ${getResp.statusText} - ${t}`
+    );
+  }
+
+  // ✅ Role exists → replace it (idempotent)
+  const putResp = await fetch(roleUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(roleObj),
+  });
+
+  if (!putResp.ok) {
+    const t = await putResp.text();
+    throw new Error(
+      `Failed to update Role "${PORYGON_ROLE_NAME}": ${putResp.status} ${putResp.statusText} - ${t}`
+    );
+  }
+
+  console.log(
+    `Role "${PORYGON_ROLE_NAME}" is up to date in namespace "${namespace}".`
+  );
+};
+
+
+const ensureRoleBindingExists = async (
+  namespace: string,
+  serviceAccountName: string,
+  userToken: string,
+  clusterUrl: string
+): Promise<void> => {
+  const getUrl = `${clusterUrl}/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/rolebindings/${PORYGON_ROLEBINDING_NAME}`;
+  const getResp = await fetch(getUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (getResp.ok) return;
+
+  if (getResp.status !== 404) {
+    const t = await getResp.text();
+    throw new Error(
+      `Failed to check RoleBinding existence: ${getResp.status} ${getResp.statusText} - ${t}`
+    );
+  }
+
+  const createUrl = `${clusterUrl}/apis/rbac.authorization.k8s.io/v1/namespaces/${namespace}/rolebindings`;
+  const createResp = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      apiVersion: "rbac.authorization.k8s.io/v1",
+      kind: "RoleBinding",
+      metadata: {
+        name: PORYGON_ROLEBINDING_NAME,
+        namespace,
+      },
+      subjects: [
+        {
+          kind: "ServiceAccount",
+          name: serviceAccountName,
+          namespace,
+        },
+      ],
+      roleRef: {
+        apiGroup: "rbac.authorization.k8s.io",
+        kind: "Role",
+        name: PORYGON_ROLE_NAME,
+      },
+    }),
+  });
+
+  if (!createResp.ok) {
+    const t = await createResp.text();
+    throw new Error(
+      `Failed to create RoleBinding "${PORYGON_ROLEBINDING_NAME}": ${createResp.status} ${createResp.statusText} - ${t}`
+    );
+  }
+
+  console.log(
+    `RoleBinding "${PORYGON_ROLEBINDING_NAME}" created successfully for SA "${serviceAccountName}" in namespace "${namespace}".`
+  );
+};
+
 
 export const authenticateUser = async (
   userToken: string,
