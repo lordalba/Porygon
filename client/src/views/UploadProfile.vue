@@ -150,7 +150,7 @@ export default defineComponent({
         if (!response.ok) throw new Error("Failed to fetch services.");
 
         const data = await response.json();
-        profile.services = data.serviceNames.map((name: string) => ({
+        profile.services = data.deploymentNames.map((name: string) => ({
           name,
           version: "",
           podCount: 1,
