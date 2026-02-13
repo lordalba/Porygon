@@ -25,7 +25,7 @@
     </div>
 
      <!-- Cluster API URL -->
-     <div class="mb-6 relative">
+     <!-- <div class="mb-6 relative">
     <label class="block text-gray-600 font-semibold mb-2 flex items-center">
       Cluster API URL
       <span class="ml-2 text-blue-500 cursor-pointer relative group">
@@ -43,7 +43,7 @@
             d="M13 16h-1v-4h-1m1-4h.01M12 4.75a7.5 7.5 0 11-7.5 7.5 7.5 7.5 0 017.5-7.5z"
           />
         </svg>
-        <!-- Tooltip -->
+         Tooltip
         <div
           class="absolute left-8 bottom-1/2 transform translate-y-1/2 bg-gray-800 text-white text-xs rounded p-2 shadow-lg z-10 hidden group-hover:block w-64"
         >
@@ -68,10 +68,10 @@
       class="w-full border-gray-300 border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
     />
     <span v-if="errors.clusterUrl" class="text-red-500 text-sm">{{ errors.clusterUrl }}</span>
-  </div>
+  </div> -->
 
     <!-- OpenShift API Token -->
-    <div class="mb-6 relative">
+    <!-- <div class="mb-6 relative">
       <label class="block text-gray-600 font-semibold mb-2 flex items-center">
         OpenShift API Token
         <span
@@ -91,7 +91,7 @@
               d="M13 16h-1v-4h-1m1-4h.01M12 4.75a7.5 7.5 0 11-7.5 7.5 7.5 7.5 0 017.5-7.5z"
             />
           </svg>
-          <!-- Tooltip -->
+          Tooltip
           <div
             class="absolute left-8 bottom-1/2 transform translate-y-1/2 bg-gray-800 text-white text-xs rounded p-2 shadow-lg z-10 hidden group-hover:block w-64"
           >
@@ -110,12 +110,12 @@
         class="w-full border-gray-300 border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       <span v-if="errors.userToken" class="text-red-500 text-sm">{{ errors.userToken }}</span>
-    </div>
+    </div> -->
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType } from "vue";
+import { defineComponent, type PropType } from "vue";
 
 export default defineComponent({
   props: {

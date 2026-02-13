@@ -1,10 +1,10 @@
 {
-  "name": "musify",
+  "name": "Porygon",
   "version": "1.0.4",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "dev": "nodemon --watch './**/*.ts' --exec ts-node src/index.ts",
+    "dev": "nodemon --watch './**/*.ts' --exec ts-node src/server.ts",
     "test": "jest"
   },
   "author": "",

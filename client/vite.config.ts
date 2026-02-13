@@ -1,12 +1,26 @@
-import { defineConfig } from 'vite';
-import vue from '@vitejs/plugin-vue';
+// vite.config.ts
+
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag: string) => tag === 'vue-json-pretty',
+        },
+      },
+    }),
+  ],
   resolve: {
     alias: {},
   },
-  compilerOptions: {
-    isCustomElement: (tag) => tag === 'vue-json-pretty',
+  // *** הוספת הגדרת ה-Build כאן! ***
+  build: {
+    // מכוון את ה-esbuild/Vite לבצע קומפילציה לגרסת JS מודרנית
+    // שתומכת בתכונת Top-Level Await.
+    target: 'es2022', 
   },
-});
+  // **********************************
+})

@@ -79,6 +79,7 @@
 
 <script>
 import { useToast } from "vue-toastification";
+import { getConfig } from "../config";
 
 export default {
   name: "SignUpPage",
@@ -98,7 +99,7 @@ export default {
     async handleSignUp() {
       try {
         // Send sign-up request
-        const response = await fetch("http://localhost:3000/api/auth/register", {
+        const response = await fetch(`${getConfig().apiUrl}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(this.form),

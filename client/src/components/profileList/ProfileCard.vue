@@ -68,6 +68,7 @@
     <ServiceTable
       v-if="showDetails"
       :services="profile.services"
+      :testing-profiles="profile.testingProfiles"
       @sync-service="$emit('sync-service', profile, $event)"
       class="transition-all duration-300 ease-in-out"
     />

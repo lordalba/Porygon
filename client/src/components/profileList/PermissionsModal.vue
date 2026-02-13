@@ -150,6 +150,7 @@
 import { ref, onMounted } from "vue";
 import { useToast } from "vue-toastification";
 import { useUserStore } from "../../store/userStore";
+import { getConfig } from "../../config";
 
 export default {
   props: {
@@ -178,7 +179,7 @@ export default {
     const fetchPermissions = async () => {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/profiles/${props.profileId}/permissions`,
+          `${getConfig().apiUrl}/profiles/${props.profileId}/permissions`,
           {
             headers: { Authorization: `Bearer ${userStore.token}` },
           }
@@ -206,7 +207,7 @@ export default {
 
       try {
         const response = await fetch(
-          `http://localhost:3000/api/profiles/${props.profileId}/permissions`,
+          `${getConfig().apiUrl}/profiles/${props.profileId}/permissions`,
           {
             method: "POST",
             headers: {
@@ -238,7 +239,7 @@ export default {
     const removePermission = async (userId) => {
       try {
         await fetch(
-          `http://localhost:3000/api/profiles/${props.profileId}/permissions/${userId}`,
+          `${getConfig().apiUrl}/profiles/${props.profileId}/permissions/${userId}`,
           {
             method: "DELETE",
             headers: { Authorization: `Bearer ${userStore.token}` },
