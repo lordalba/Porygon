@@ -1,6 +1,34 @@
 import axios from "axios";
-import { KubernetesClient, KubernetesConfig } from "../../clients/KubernetesClient";
+import {
+  KubernetesClient,
+  KubernetesConfig,
+} from "../../clients/KubernetesClient";
 import { ImageParser } from "../../utils/ImageParser";
+import WebSocketManager from "../../websockets/websocketServer";
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isConditionTrue = (deployment: any, type: string) => {
+  const conditions = deployment?.status?.conditions ?? [];
+  const c = conditions.find((x: any) => x?.type === type);
+  return c?.status === "True";
+};
+
+const describeProgress = (deployment: any) => {
+  const st = deployment?.status ?? {};
+  return {
+    replicas: st.replicas ?? 0,
+    updated: st.updatedReplicas ?? 0,
+    ready: st.readyReplicas ?? 0,
+    available: st.availableReplicas ?? 0,
+    unavailable: st.unavailableReplicas ?? 0,
+  };
+};
+
+type RolloutWaitOptions = {
+  pollIntervalMs?: number; // כל כמה זמן לבדוק סטטוס
+  timeoutMs?: number; // כמה זמן מקסימום לחכות לשירות
+};
 
 export interface DeploymentInfo {
   name: string;
@@ -49,7 +77,7 @@ export class DeploymentService extends KubernetesClient {
   async list(namespace: string): Promise<DeploymentSpec[]> {
     const response = await this.request<DeploymentList>(
       `/apis/apps/v1/namespaces/${namespace}/deployments`,
-      { method: "GET" }
+      { method: "GET" },
     );
     return response.items;
   }
@@ -60,7 +88,7 @@ export class DeploymentService extends KubernetesClient {
   async get(namespace: string, name: string): Promise<DeploymentSpec> {
     return this.request<DeploymentSpec>(
       `/apis/apps/v1/namespaces/${namespace}/deployments/${name}`,
-      { method: "GET" }
+      { method: "GET" },
     );
   }
 
@@ -68,7 +96,7 @@ export class DeploymentService extends KubernetesClient {
    * Get versions and pod counts for all deployments in a namespace
    */
   async getVersionsAndPodCounts(
-    namespace: string
+    namespace: string,
   ): Promise<Record<string, DeploymentInfo>> {
     console.log("Fetching deployment versions for namespace:", namespace);
 
@@ -82,7 +110,8 @@ export class DeploymentService extends KubernetesClient {
       const containers = deployment?.spec?.template?.spec?.containers ?? [];
       const image = containers?.[0]?.image || "unknown";
 
-      const version = image === "unknown" ? "unknown" : ImageParser.extractTag(image);
+      const version =
+        image === "unknown" ? "unknown" : ImageParser.extractTag(image);
 
       // Prefer readyReplicas (actual running+ready pods)
       const ready = deployment?.status?.readyReplicas;
@@ -92,13 +121,13 @@ export class DeploymentService extends KubernetesClient {
         typeof ready === "number"
           ? ready
           : typeof available === "number"
-          ? available
-          : 0;
+            ? available
+            : 0;
 
-      versions[deploymentName] = { 
+      versions[deploymentName] = {
         name: deploymentName,
-        version, 
-        podCount 
+        version,
+        podCount,
       };
     }
 
@@ -113,7 +142,7 @@ export class DeploymentService extends KubernetesClient {
     namespace: string,
     deploymentName: string,
     containerIndex: number,
-    newImage: string
+    newImage: string,
   ): Promise<void> {
     const url = `/apis/apps/v1/namespaces/${namespace}/deployments/${deploymentName}`;
     const patch = [
@@ -131,7 +160,9 @@ export class DeploymentService extends KubernetesClient {
       },
     });
 
-    console.log(`Updated image for deployment "${deploymentName}" to "${newImage}".`);
+    console.log(
+      `Updated image for deployment "${deploymentName}" to "${newImage}".`,
+    );
   }
 
   /**
@@ -140,12 +171,10 @@ export class DeploymentService extends KubernetesClient {
   async scale(
     namespace: string,
     deploymentName: string,
-    replicas: number
+    replicas: number,
   ): Promise<void> {
     const url = `/apis/apps/v1/namespaces/${namespace}/deployments/${deploymentName}`;
-    const patch = [
-      { op: "replace", path: "/spec/replicas", value: replicas },
-    ];
+    const patch = [{ op: "replace", path: "/spec/replicas", value: replicas }];
 
     await axios.patch(`${this.config.clusterUrl}${url}`, patch, {
       headers: {
@@ -154,7 +183,9 @@ export class DeploymentService extends KubernetesClient {
       },
     });
 
-    console.log(`Scaled deployment "${deploymentName}" to ${replicas} replicas.`);
+    console.log(
+      `Scaled deployment "${deploymentName}" to ${replicas} replicas.`,
+    );
   }
 
   /**
@@ -162,5 +193,76 @@ export class DeploymentService extends KubernetesClient {
    */
   findContainerIndex(containers: Container[], containerName: string): number {
     return containers.findIndex((c) => c.name === containerName);
+  }
+
+  /**
+   * Wait until a deployment finishes rollout to desired replicas (or timeout).
+   */
+  /**
+   * Wait until a deployment finishes rollout to desired replicas (or timeout).
+   */
+  async waitForDeploymentRollout(
+    namespace: string,
+    deploymentName: string,
+    desiredReplicas: number,
+    websocketManager: WebSocketManager,
+    opts: RolloutWaitOptions = {},
+  ): Promise<void> {
+    const pollIntervalMs = opts.pollIntervalMs ?? 2000;
+    const timeoutMs = opts.timeoutMs ?? 1 * 60 * 1000;
+
+    const start = Date.now();
+
+    websocketManager.broadcast("SYNC_STEP", {
+      namespace,
+      serviceName: deploymentName,
+      step: "WAITING_FOR_ROLLOUT",
+      desiredReplicas,
+      pollIntervalMs,
+      timeoutMs,
+    });
+
+    while (true) {
+      if (Date.now() - start > timeoutMs) {
+        throw new Error(
+          `Rollout timeout for "${deploymentName}" after ${Math.round(timeoutMs / 1000)}s`,
+        );
+      }
+
+      const deployment = await this.get(namespace, deploymentName);
+
+      const generation = (deployment as any)?.metadata?.generation ?? 0;
+      const observedGeneration =
+        (deployment as any)?.status?.observedGeneration ?? 0;
+
+      const st = (deployment as any)?.status ?? {};
+      const updated = st.updatedReplicas ?? 0;
+      const available = st.availableReplicas ?? 0;
+
+      const progressingOk = isConditionTrue(deployment, "Progressing");
+      const availableOk = isConditionTrue(deployment, "Available");
+
+      websocketManager.broadcast("SYNC_STEP", {
+        namespace,
+        serviceName: deploymentName,
+        step: "ROLLOUT_PROGRESS",
+        generation,
+        observedGeneration,
+        progressingOk,
+        availableOk,
+        ...describeProgress(deployment),
+        desiredReplicas,
+      });
+
+      const done =
+        observedGeneration >= generation &&
+        updated >= desiredReplicas &&
+        available >= desiredReplicas &&
+        availableOk;
+
+      if (done) return;
+
+      await sleep(pollIntervalMs);
+    }
   }
 }

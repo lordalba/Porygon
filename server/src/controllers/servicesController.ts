@@ -1,12 +1,14 @@
 import { Request, Response } from "express";
 import { OpenShiftService } from "../services/openshiftService";
-import WebSocketManager from "../websockets/websocketServer"; // ✅ FIX: relative import
+import WebSocketManager from "../websockets/websocketServer";
+import { DeploymentService } from "../services/openshift/DeploymentService";
+import { KubernetesConfig } from "../clients/KubernetesClient";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const fetchNamespaceDeployments = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { namespace, userToken, clusterUrl } = req.body;
 
@@ -24,13 +26,13 @@ export const fetchNamespaceDeployments = async (
           Authorization: `Bearer ${userToken}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (!response.ok) {
       const t = await response.text();
       throw new Error(
-        `Failed to fetch deployments: ${response.status} ${response.statusText} - ${t}`
+        `Failed to fetch deployments: ${response.status} ${response.statusText} - ${t}`,
       );
     }
 
@@ -49,7 +51,7 @@ export const fetchNamespaceDeployments = async (
 export const handleSyncService = async (
   req: Request,
   res: Response,
-  websocketManager: WebSocketManager
+  websocketManager: WebSocketManager,
 ): Promise<void> => {
   const {
     namespace,
@@ -80,10 +82,12 @@ export const handleSyncService = async (
       desiredPodCount,
       saToken,
       clusterUrl,
-      websocketManager
+      websocketManager,
     );
 
-    res.status(200).json({ message: `Service ${serviceName} synced successfully` });
+    res
+      .status(200)
+      .json({ message: `Service ${serviceName} synced successfully` });
   } catch (error: any) {
     console.error(`Error syncing service ${serviceName}:`, error);
     res.status(500).json({ error: error?.message ?? "Failed to sync service" });
@@ -93,10 +97,8 @@ export const handleSyncService = async (
 export const handleMultipleSyncService = async (
   req: Request,
   res: Response,
-  websocketManager: WebSocketManager
+  websocketManager: WebSocketManager,
 ): Promise<void> => {
-  const SYNC_DELAY_MS = 8000;
-
   const { namespace, servicesData, saToken, clusterUrl } = req.body;
 
   if (!namespace || !Array.isArray(servicesData) || !saToken || !clusterUrl) {
@@ -104,20 +106,25 @@ export const handleMultipleSyncService = async (
     return;
   }
 
-  // ✅ send HTTP response once
+  const config: KubernetesConfig = { token: saToken, clusterUrl };
+  const deploymentService = new DeploymentService(config);
+
+  // ✅ response once
   res.status(202).json({
-    message: `Batch sync started`,
+    message: `Smart batch sync started`,
     total: servicesData.length,
   });
 
-  // ✅ announce batch start via WS (optional but very useful)
   websocketManager.broadcast("BATCH_SYNC_STARTED", {
     namespace,
     total: servicesData.length,
+    mode: "SMART_ROLLOUT_GUARD",
   });
 
   let successCount = 0;
   let errorCount = 0;
+
+  const BETWEEN_SERVICES_DELAY_MS = 2000;
 
   for (const service of servicesData) {
     const serviceName = service?.name;
@@ -130,13 +137,15 @@ export const handleMultipleSyncService = async (
         namespace,
         serviceName: serviceName ?? "unknown",
         status: "error",
-        error: "Invalid service payload (missing name/desiredVersion/desiredPodCount)",
+        error:
+          "Invalid service payload (missing name/desiredVersion/desiredPodCount)",
       });
-      await sleep(SYNC_DELAY_MS);
+      await sleep(BETWEEN_SERVICES_DELAY_MS);
       continue;
     }
 
     try {
+      // 1) Sync (patch image/replicas)
       await OpenShiftService.syncService(
         namespace,
         serviceName,
@@ -144,16 +153,29 @@ export const handleMultipleSyncService = async (
         desiredPodCount,
         saToken,
         clusterUrl,
-        websocketManager
+        websocketManager,
+      );
+
+      await deploymentService.waitForDeploymentRollout(
+        namespace,
+        serviceName,
+        desiredPodCount,
+        websocketManager,
+        {
+          pollIntervalMs: 2000,
+          timeoutMs: 1 * 60 * 1000,
+        },
       );
 
       successCount++;
-      console.log(`Synced service: ${serviceName}`);
+      websocketManager.broadcast("SYNC_COMPLETE", {
+        namespace,
+        serviceName,
+        status: "success",
+      });
     } catch (error: any) {
       errorCount++;
-      console.error(`Error syncing service ${serviceName}:`, error);
 
-      // ✅ DO NOT touch res here. Use WS.
       websocketManager.broadcast("SYNC_COMPLETE", {
         namespace,
         serviceName,
@@ -162,7 +184,7 @@ export const handleMultipleSyncService = async (
       });
     }
 
-    await sleep(SYNC_DELAY_MS);
+    await sleep(BETWEEN_SERVICES_DELAY_MS);
   }
 
   websocketManager.broadcast("BATCH_SYNC_COMPLETE", {
@@ -170,5 +192,6 @@ export const handleMultipleSyncService = async (
     total: servicesData.length,
     successCount,
     errorCount,
+    mode: "SMART_ROLLOUT_GUARD",
   });
 };
