@@ -191,6 +191,7 @@
                 :profile="profile"
                 :show-out-of-sync="showOutOfSyncOnly"
                 :service-name-filter="serviceNameFilter"
+                :health-alerts="healthAlerts"
                 @sync-all="syncAllServices"
                 @sync-service="syncService"
               />
@@ -204,6 +205,12 @@
           :services-to-sync="servicesToSync"
           @confirm="confirmSyncAll"
           @cancel="cancelSyncAll"
+        />
+        <HealthAlertModal
+          :show="showHealthAlertModal"
+          :report="currentHealthAlert"
+          @close="showHealthAlertModal = false"
+          @dont-show-again="handleDontShowAgain"
         />
       </div>
     </div>
@@ -224,9 +231,10 @@ import ProfileCard from "../components/profileList/ProfileCard.vue";
 import { useUserStore } from "../store/userStore";
 import { getConfig } from "../config";
 import SyncAllConfirmModal from "../components/profileList/SyncAllConfirmModal.vue";
+import HealthAlertModal from "../components/profileList/HealthAlertModal.vue";
 
 export default defineComponent({
-  components: { ProfileCard, SyncAllConfirmModal },
+  components: { ProfileCard, SyncAllConfirmModal, HealthAlertModal },
 
   setup() {
     const toast = useToast();
@@ -239,6 +247,10 @@ export default defineComponent({
     const userStore = useUserStore();
     const showSyncAllModal = ref(false);
     const selectedProfile = ref(null);
+    const healthAlerts = ref(new Map());
+    const currentHealthAlert = ref(null);
+    const showHealthAlertModal = ref(false);
+    const dismissedAlerts = ref(new Set());
 
     // ✅ keep unsubscribers so we can cleanup
     let unsubs = [];
@@ -326,36 +338,58 @@ export default defineComponent({
       return result;
     });
 
+    const handleDontShowAgain = (serviceName) => {
+      dismissedAlerts.value.add(serviceName);
+    };
+
     const syncService = async (profile, service) => {
+      const payload = {
+        namespace: profile.namespace,
+        serviceName: service.name,
+        desiredVersion: service.desiredVersion,
+        desiredPodCount: service.desiredPodCount,
+        saToken: profile.saToken,
+        clusterUrl: profile.clusterUrl,
+      };
+      // [SYNC_DEBUG] temporary - remove after debugging
+      console.log("[SYNC_DEBUG] client syncService sending:", {
+        namespace: payload.namespace,
+        serviceName: payload.serviceName,
+        desiredVersion: payload.desiredVersion,
+        desiredPodCount: payload.desiredPodCount,
+        hasSaToken: !!payload.saToken,
+        hasClusterUrl: !!payload.clusterUrl,
+        clusterUrl: payload.clusterUrl ? String(payload.clusterUrl).slice(0, 50) + "..." : undefined,
+      });
       try {
-        const response = await fetch(
-          `http://${getConfig().urlHost}/api/services/sync`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              namespace: profile.namespace,
-              serviceName: service.name,
-              desiredVersion: service.desiredVersion,
-              desiredPodCount: service.desiredPodCount,
-              saToken: profile.saToken,
-              clusterUrl: profile.clusterUrl,
-            }),
+        const url = `http://${getConfig().urlHost}/api/services/sync`;
+        console.log("[SYNC_DEBUG] client POST url:", url);
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        );
+          body: JSON.stringify(payload),
+        });
+
+        console.log("[SYNC_DEBUG] client response:", {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+        });
 
         if (response.ok) {
           toast.info(`Started sync for ${service.name}. Watch live updates…`);
           // ❗ לא עושים fetchProfiles כאן — ה-WS יעדכן
         } else {
           const errorData = await response.json().catch(() => ({}));
+          console.log("[SYNC_DEBUG] client error body:", errorData);
           toast.error(
             `Failed to sync service: ${errorData.error || "Unknown error"}`,
           );
         }
       } catch (error) {
+        console.error("[SYNC_DEBUG] client syncService error:", error);
         toast.error("Network error. Unable to sync service.");
       }
     };
@@ -473,6 +507,40 @@ export default defineComponent({
           );
           await fetchProfiles(); // ✅ רענון אחד בסוף הבאץ'
         }),
+
+        websocketClient.on("POST_SYNC_HEALTH_OK", (p) => {
+          // Health check passed - no action needed, just log
+          console.log(`Health check OK for ${p?.serviceName}`);
+        }),
+
+        websocketClient.on("POST_SYNC_HEALTH_ALERT", (p) => {
+          const serviceName = p?.serviceName;
+          const report = p?.report;
+          if (!serviceName || !report) return;
+
+          // Store alert
+          healthAlerts.value.set(serviceName, report);
+
+          // Show modal if not dismissed for this service
+          if (!dismissedAlerts.value.has(serviceName)) {
+            currentHealthAlert.value = report;
+            showHealthAlertModal.value = true;
+            // Show toast only once per alert
+            toast.warning(`⚠️ Health issue detected: ${serviceName}`, {
+              timeout: 5000,
+            });
+          }
+        }),
+
+        websocketClient.on("BATCH_HEALTH_SUMMARY", (p) => {
+          const failingServices = p?.failingServices || [];
+          if (failingServices.length > 0) {
+            toast.warning(
+              `Batch sync complete: ${failingServices.length} service(s) have health issues`,
+              { timeout: 6000 }
+            );
+          }
+        }),
       ];
     });
 
@@ -489,6 +557,9 @@ export default defineComponent({
       serviceNameFilter,
       showOutOfSyncOnly,
       showTestingOnly,
+      healthAlerts,
+      currentHealthAlert,
+      showHealthAlertModal,
       toggleOutOfSyncFilter,
       toggleTestingView,
       filteredProfiles,

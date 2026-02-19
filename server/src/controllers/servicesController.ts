@@ -3,6 +3,7 @@ import { OpenShiftService } from "../services/openshiftService";
 import WebSocketManager from "../websockets/websocketServer";
 import { DeploymentService } from "../services/openshift/DeploymentService";
 import { KubernetesConfig } from "../clients/KubernetesClient";
+import { PostSyncHealthGuard } from "../services/openshift/PostSyncHealthGuard";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,6 +49,12 @@ export const fetchNamespaceDeployments = async (
   }
 };
 
+/** Remove control chars and trim so token is safe for Authorization header */
+function sanitizeToken(token: unknown): string {
+  if (token == null || typeof token !== "string") return "";
+  return token.replace(/[\r\n\t]/g, "").trim();
+}
+
 export const handleSyncService = async (
   req: Request,
   res: Response,
@@ -58,9 +65,22 @@ export const handleSyncService = async (
     serviceName,
     desiredVersion,
     desiredPodCount,
-    saToken,
+    saToken: rawSaToken,
     clusterUrl,
   } = req.body;
+
+  const saToken = sanitizeToken(rawSaToken);
+
+  // [SYNC_DEBUG] temporary - remove after debugging
+  console.log("[SYNC_DEBUG] handleSyncService received:", {
+    namespace,
+    serviceName,
+    desiredVersion,
+    desiredPodCount,
+    hasSaToken: !!saToken,
+    hasClusterUrl: !!clusterUrl,
+    clusterUrl: clusterUrl ? `${String(clusterUrl).slice(0, 40)}...` : undefined,
+  });
 
   if (
     !namespace ||
@@ -70,11 +90,13 @@ export const handleSyncService = async (
     !saToken ||
     !clusterUrl
   ) {
+    console.log("[SYNC_DEBUG] handleSyncService rejected: missing required fields");
     res.status(400).json({ error: "Missing required fields" });
     return;
   }
 
   try {
+    console.log("[SYNC_DEBUG] handleSyncService calling OpenShiftService.syncService");
     await OpenShiftService.syncService(
       namespace,
       serviceName,
@@ -85,10 +107,12 @@ export const handleSyncService = async (
       websocketManager,
     );
 
+    console.log("[SYNC_DEBUG] handleSyncService completed successfully");
     res
       .status(200)
       .json({ message: `Service ${serviceName} synced successfully` });
   } catch (error: any) {
+    console.error("[SYNC_DEBUG] handleSyncService error:", error?.message ?? error);
     console.error(`Error syncing service ${serviceName}:`, error);
     res.status(500).json({ error: error?.message ?? "Failed to sync service" });
   }
@@ -99,7 +123,8 @@ export const handleMultipleSyncService = async (
   res: Response,
   websocketManager: WebSocketManager,
 ): Promise<void> => {
-  const { namespace, servicesData, saToken, clusterUrl } = req.body;
+  const { namespace, servicesData, saToken: rawSaToken, clusterUrl } = req.body;
+  const saToken = sanitizeToken(rawSaToken);
 
   if (!namespace || !Array.isArray(servicesData) || !saToken || !clusterUrl) {
     res.status(400).json({ error: "Missing required fields" });
@@ -123,8 +148,10 @@ export const handleMultipleSyncService = async (
 
   let successCount = 0;
   let errorCount = 0;
+  const healthReports: Array<{ serviceName: string; report: any }> = [];
 
   const BETWEEN_SERVICES_DELAY_MS = 500;
+  const healthGuard = new PostSyncHealthGuard(config, websocketManager);
 
   for (const service of servicesData) {
     const serviceName = service?.name;
@@ -181,6 +208,59 @@ export const handleMultipleSyncService = async (
         },
       );
 
+      // 4) Post-sync health check
+      try {
+        const healthReport = await healthGuard.checkHealth(
+          namespace,
+          serviceName,
+          desiredPodCount,
+          {
+            pollIntervalMs: 2000,
+            timeoutMs: 300_000, // 5 minutes
+          }
+        );
+
+        healthReports.push({ serviceName, report: healthReport });
+
+        if (healthReport.severity === "ok") {
+          websocketManager.broadcast("POST_SYNC_HEALTH_OK", {
+            namespace,
+            serviceName,
+            report: healthReport,
+          });
+        } else {
+          websocketManager.broadcast("POST_SYNC_HEALTH_ALERT", {
+            namespace,
+            serviceName,
+            report: healthReport,
+          });
+        }
+      } catch (healthError: any) {
+        console.warn(`Health check failed for ${serviceName}:`, healthError);
+        const errorReport = {
+          namespace,
+          serviceName,
+          severity: "error" as const,
+          summary: `Health check error: ${healthError?.message ?? String(healthError)}`,
+          issues: [
+            {
+              type: "HealthCheckError",
+              message: healthError?.message ?? String(healthError),
+            },
+          ],
+          suggestedActions: [],
+          timestamps: {
+            detectedAt: new Date().toISOString(),
+          },
+        };
+        healthReports.push({ serviceName, report: errorReport });
+        websocketManager.broadcast("POST_SYNC_HEALTH_ALERT", {
+          namespace,
+          serviceName,
+          report: errorReport,
+        });
+      }
+
       successCount++;
       websocketManager.broadcast("SYNC_COMPLETE", {
         namespace,
@@ -199,6 +279,23 @@ export const handleMultipleSyncService = async (
     }
 
     await sleep(BETWEEN_SERVICES_DELAY_MS);
+  }
+
+  // Send batch health summary
+  const failingServices = healthReports.filter(
+    (hr) => hr.report.severity === "error" || hr.report.severity === "warning"
+  );
+  if (failingServices.length > 0) {
+    websocketManager.broadcast("BATCH_HEALTH_SUMMARY", {
+      namespace,
+      total: servicesData.length,
+      failingServices: failingServices.map((hr) => ({
+        serviceName: hr.serviceName,
+        severity: hr.report.severity,
+        summary: hr.report.summary,
+        issueCount: hr.report.issues.length,
+      })),
+    });
   }
 
   websocketManager.broadcast("BATCH_SYNC_COMPLETE", {
