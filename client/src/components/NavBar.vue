@@ -30,6 +30,14 @@
           </router-link>
           <router-link
           v-if="userStore.user"
+            to="/browse-profiles"
+            class="px-3 py-1 text-sm font-medium rounded-md hover:bg-blue-600 transition"
+            active-class="bg-blue-700"
+          >
+            Browse Profiles
+          </router-link>
+          <router-link
+          v-if="userStore.user"
             to="/manage-testing"
             class="px-3 py-1 text-sm font-medium rounded-md hover:bg-blue-600 transition"
             active-class="bg-blue-700"

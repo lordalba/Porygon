@@ -105,6 +105,91 @@
             <p v-else class="text-gray-500 dark:text-gray-400 text-center py-6">
               No permissions set for this profile
             </p>
+
+            <!-- Pending Requests Section -->
+            <section v-if="canUserEditProfile() && pendingRequests.length" class="space-y-4 mt-6">
+              <h3
+                class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3"
+              >
+                Pending Join Requests
+              </h3>
+              <div class="grid gap-3">
+                <div
+                  v-for="request in pendingRequests"
+                  :key="request._id"
+                  class="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg shadow-sm border border-yellow-200 dark:border-yellow-800"
+                >
+                  <div class="flex items-center space-x-4">
+                    <div
+                      class="w-10 h-10 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center"
+                    >
+                      <span class="text-yellow-600 dark:text-yellow-300 font-bold">
+                        {{
+                          (request.user.name ||
+                            request.user.email)[0].toUpperCase()
+                        }}
+                      </span>
+                    </div>
+                    <div>
+                      <p class="font-medium text-gray-800 dark:text-gray-200">
+                        {{ request.user.name || request.user.email }}
+                      </p>
+                      <div class="flex items-center space-x-2 mt-1">
+                        <span
+                          class="text-sm capitalize px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
+                        >
+                          Requested: {{ request.requestedRole }}
+                        </span>
+                        <span class="text-xs text-gray-500">
+                          {{ formatDate(request.requestedAt) }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex space-x-2">
+                    <button
+                      @click="approveRequest(request._id)"
+                      class="text-green-600 hover:text-green-700 bg-green-50 dark:bg-green-900/20 p-2 rounded-full hover:bg-green-100 transition-colors"
+                      title="Approve"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      @click="rejectRequest(request._id)"
+                      class="text-red-500 hover:text-red-700 bg-red-50 dark:bg-red-900/20 p-2 rounded-full hover:bg-red-100 transition-colors"
+                      title="Reject"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <p v-if="canUserEditProfile() && pendingRequests.length === 0" class="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">
+              No pending requests
+            </p>
           </div>
 
           <!-- Add User Section -->
@@ -170,6 +255,7 @@ export default {
   emits: ["close"],
   setup(props, { emit }) {
     const permissions = ref([]);
+    const pendingRequests = ref([]);
     const newUserName = ref("");
     const newUserRole = ref("viewer");
     const validationError = ref("");
@@ -190,6 +276,94 @@ export default {
       } catch (error) {
         console.error("Failed to fetch permissions:", error);
       }
+    };
+
+    const fetchPendingRequests = async () => {
+      // Wait for permissions to load first
+      if (permissions.value.length === 0) {
+        await fetchPermissions();
+      }
+      
+      if (!canUserEditProfile()) return;
+      
+      try {
+        const response = await fetch(
+          `http://${getConfig().urlHost}/api/profiles/${props.profileId}/requests`,
+          {
+            headers: { Authorization: `Bearer ${userStore.token}` },
+          }
+        );
+        if (response.ok) {
+          pendingRequests.value = await response.json();
+        }
+      } catch (error) {
+        console.error("Failed to fetch pending requests:", error);
+      }
+    };
+
+    const approveRequest = async (requestId) => {
+      try {
+        const response = await fetch(
+          `http://${getConfig().urlHost}/api/profiles/${props.profileId}/requests/${requestId}/approve`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${userStore.token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.ok) {
+          toast.success("Join request approved!");
+          // Remove from pending requests
+          pendingRequests.value = pendingRequests.value.filter(
+            (r) => r._id !== requestId
+          );
+          // Refresh permissions to show the new user
+          await fetchPermissions();
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          toast.error(errorData.error || "Failed to approve request");
+        }
+      } catch (error) {
+        console.error("Error approving request:", error);
+        toast.error("Network error. Please try again.");
+      }
+    };
+
+    const rejectRequest = async (requestId) => {
+      try {
+        const response = await fetch(
+          `http://${getConfig().urlHost}/api/profiles/${props.profileId}/requests/${requestId}/reject`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${userStore.token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.ok) {
+          toast.success("Join request rejected");
+          // Remove from pending requests
+          pendingRequests.value = pendingRequests.value.filter(
+            (r) => r._id !== requestId
+          );
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          toast.error(errorData.error || "Failed to reject request");
+        }
+      } catch (error) {
+        console.error("Error rejecting request:", error);
+        toast.error("Network error. Please try again.");
+      }
+    };
+
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
     const addPermission = async () => {
@@ -269,14 +443,21 @@ export default {
 
     const close = () => emit("close");
 
-    onMounted(fetchPermissions);
+    onMounted(async () => {
+      await fetchPermissions();
+      await fetchPendingRequests();
+    });
 
     return {
       permissions,
+      pendingRequests,
       newUserName,
       newUserRole,
       addPermission,
       removePermission,
+      approveRequest,
+      rejectRequest,
+      formatDate,
       close,
       validationError,
       canUserEditProfile,

@@ -7,6 +7,8 @@ import WebSocketManager from "../websockets/websocketServer";
 import { monitorOpenShiftChanges } from "../utils/openshiftPoller";
 import { MyUserRequest } from "src/express";
 import User from "../models/User";
+import { ProfileJoinRequest } from "../models/ProfileJoinRequest";
+import mongoose from "mongoose";
 
 // Fetch a single profile by ID
 export const getProfileById = async (req: MyUserRequest, res: Response) => {
@@ -251,6 +253,282 @@ export const removeUserFromProfile = async (req: MyUserRequest, res: Response) =
   } catch (error) {
     console.error("Error removing user from profile:", error);
     return res.status(500).json({ error: "An error occurred while removing the user." });
+  }
+};
+
+// Helper function to check if user is admin or editor for a profile
+const hasAdminOrEditorAccess = (profile: any, userId: string | undefined): boolean => {
+  if (!userId) return false;
+  const permission = profile.permissions.find(
+    (perm: any) => perm.user.toString() === userId.toString()
+  );
+  return permission && (permission.role === "admin" || permission.role === "editor");
+};
+
+// Get all profiles (for browsing - users can see all profiles)
+export const getAllProfiles = async (req: MyUserRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ error: "User not authenticated" });
+      return;
+    }
+
+    // Get all profiles
+    const allProfiles = await Profile.find({}).populate("testingProfiles").lean();
+
+    // Get user's existing permissions
+    const userPermissions = await Profile.find({
+      "permissions": { $elemMatch: { user: userId } },
+    }).select("_id").lean();
+
+    // Get user's pending requests
+    const userPendingRequests = await ProfileJoinRequest.find({
+      user: userId,
+      status: "pending",
+    }).lean();
+
+    const userProfileIdsWithAccess = new Set(
+      userPermissions.map((p: any) => p._id.toString())
+    );
+
+    const userProfileIdsWithPendingRequests = new Set(
+      userPendingRequests.map((r: any) => r.profile.toString())
+    );
+
+    // Enrich profiles with user's access status
+    const enrichedProfiles = allProfiles.map((profile: any) => {
+      const hasAccess = userProfileIdsWithAccess.has(profile._id.toString());
+      const requestPending = userProfileIdsWithPendingRequests.has(profile._id.toString());
+      const permission = profile.permissions.find(
+        (perm: any) => perm.user.toString() === userId
+      );
+      
+      return {
+        ...profile,
+        hasAccess,
+        requestPending,
+        userRole: permission?.role || null,
+        canRequest: !hasAccess && !requestPending,
+      };
+    });
+
+    res.status(200).json(enrichedProfiles);
+  } catch (error) {
+    console.error("Error fetching all profiles:", error);
+    res.status(500).json({ error: "Failed to fetch profiles" });
+  }
+};
+
+// Request to join a profile
+export const requestToJoinProfile = async (req: MyUserRequest, res: Response) => {
+  try {
+    const { profileId } = req.params;
+    const { requestedRole } = req.body;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const profile = await Profile.findById(profileId);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found." });
+    }
+
+    // Check if user already has access
+    const existingPermission = profile.permissions.find(
+      (perm) => perm.user.toString() === userId
+    );
+    if (existingPermission) {
+      return res.status(400).json({ error: "You already have access to this profile." });
+    }
+
+    // Check if there's already a pending request
+    const existingRequest = await ProfileJoinRequest.findOne({
+      profile: profileId,
+      user: userId,
+      status: "pending",
+    });
+
+    if (existingRequest) {
+      return res.status(400).json({ error: "You already have a pending request for this profile." });
+    }
+
+    // Create the request
+    const joinRequest = await ProfileJoinRequest.create({
+      profile: profileId,
+      user: userId,
+      requestedRole: requestedRole || "viewer",
+      status: "pending",
+    });
+
+    const populatedRequest = await ProfileJoinRequest.findById(joinRequest._id)
+      .populate("user", "name email")
+      .populate("profile", "name");
+
+    return res.status(201).json(populatedRequest);
+  } catch (error: any) {
+    console.error("Error creating join request:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({ error: "A pending request already exists for this profile." });
+    }
+    return res.status(500).json({ error: "An error occurred while creating the join request." });
+  }
+};
+
+// Get pending requests for a profile (admin/editor only)
+export const getProfileJoinRequests = async (req: MyUserRequest, res: Response) => {
+  try {
+    const { profileId } = req.params;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const profile = await Profile.findById(profileId);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found." });
+    }
+
+    // Check if user has admin or editor access
+    if (!hasAdminOrEditorAccess(profile, userId)) {
+      return res.status(403).json({ error: "You don't have permission to view requests for this profile." });
+    }
+
+    const requests = await ProfileJoinRequest.find({
+      profile: profileId,
+      status: "pending",
+    })
+      .populate("user", "name email")
+      .sort({ requestedAt: -1 });
+
+    return res.status(200).json(requests);
+  } catch (error) {
+    console.error("Error fetching join requests:", error);
+    return res.status(500).json({ error: "An error occurred while fetching join requests." });
+  }
+};
+
+// Approve a join request (admin/editor only)
+export const approveJoinRequest = async (req: MyUserRequest, res: Response) => {
+  try {
+    const { profileId, requestId } = req.params;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const profile = await Profile.findById(profileId);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found." });
+    }
+
+    // Check if user has admin or editor access
+    if (!hasAdminOrEditorAccess(profile, userId)) {
+      return res.status(403).json({ error: "You don't have permission to approve requests for this profile." });
+    }
+
+    const joinRequest = await ProfileJoinRequest.findById(requestId)
+      .populate("user", "name email");
+    
+    if (!joinRequest) {
+      return res.status(404).json({ error: "Join request not found." });
+    }
+
+    if (joinRequest.profile.toString() !== profileId) {
+      return res.status(400).json({ error: "Request does not belong to this profile." });
+    }
+
+    if (joinRequest.status !== "pending") {
+      return res.status(400).json({ error: "Request has already been processed." });
+    }
+
+    // Check if user is already in the profile
+    const existingPermission = profile.permissions.find(
+      (perm) => perm.user.toString() === joinRequest.user._id.toString()
+    );
+    if (existingPermission) {
+      // Mark request as approved even though user already has access
+      joinRequest.status = "approved";
+      joinRequest.reviewedAt = new Date();
+      joinRequest.reviewedBy = new mongoose.Types.ObjectId(userId as string);
+      await joinRequest.save();
+      return res.status(200).json({ message: "User already has access to this profile." });
+    }
+
+    // Add user to profile permissions
+    profile.permissions.push({
+      user: joinRequest.user._id,
+      role: joinRequest.requestedRole,
+    });
+    await profile.save();
+
+    // Update request status - userId is guaranteed to be defined here due to check above
+    joinRequest.status = "approved";
+    joinRequest.reviewedAt = new Date();
+    joinRequest.reviewedBy = new mongoose.Types.ObjectId(userId as string);
+    await joinRequest.save();
+
+    // Ensure user is populated
+    const populatedUser = joinRequest.user as any;
+    return res.status(200).json({
+      message: "Join request approved successfully.",
+      user: { name: populatedUser.name, id: populatedUser._id },
+      role: joinRequest.requestedRole,
+    });
+  } catch (error) {
+    console.error("Error approving join request:", error);
+    return res.status(500).json({ error: "An error occurred while approving the join request." });
+  }
+};
+
+// Reject a join request (admin/editor only)
+export const rejectJoinRequest = async (req: MyUserRequest, res: Response) => {
+  try {
+    const { profileId, requestId } = req.params;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const profile = await Profile.findById(profileId);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found." });
+    }
+
+    // Check if user has admin or editor access
+    if (!hasAdminOrEditorAccess(profile, userId)) {
+      return res.status(403).json({ error: "You don't have permission to reject requests for this profile." });
+    }
+
+    const joinRequest = await ProfileJoinRequest.findById(requestId);
+    
+    if (!joinRequest) {
+      return res.status(404).json({ error: "Join request not found." });
+    }
+
+    if (joinRequest.profile.toString() !== profileId) {
+      return res.status(400).json({ error: "Request does not belong to this profile." });
+    }
+
+    if (joinRequest.status !== "pending") {
+      return res.status(400).json({ error: "Request has already been processed." });
+    }
+
+    // Update request status - userId is guaranteed to be defined here due to check above
+    joinRequest.status = "rejected";
+    joinRequest.reviewedAt = new Date();
+    joinRequest.reviewedBy = new mongoose.Types.ObjectId(userId as string);
+    await joinRequest.save();
+
+    return res.status(200).json({ message: "Join request rejected successfully." });
+  } catch (error) {
+    console.error("Error rejecting join request:", error);
+    return res.status(500).json({ error: "An error occurred while rejecting the join request." });
   }
 };
 
